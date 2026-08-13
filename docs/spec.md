@@ -100,11 +100,28 @@ Justification : ces comportements sont les patterns historiques éprouvés ; ils
 
 | Plateforme | Action | Entrée |
 |---|---|---|
-| Desktop | Déplacement | Flèches ou WASD |
+| Desktop | Déplacement | Flèches ou WASD (AZERTY: ZQSD) |
 | Desktop | Pause | `P` ou `Échap` |
 | Desktop | Démarrer / Rejouer | `Espace` / `Entrée` |
+| Smartphone | Déplacement | D-pad tactile transparent (croix directionnelle) |
+| Smartphone | Démarrer / Pause | Bouton tactile d'action (`⏯`) |
 
-Le support tactile (glissements directionnels) est prévu comme évolution future, pas dans la portée initiale.
+#### 2.6.1 Contrôles tactiles transparents (mobile)
+
+Sur smartphone, une **croix directionnelle (D-pad)** et un **bouton d'action** sont superposés au jeu, en **transparence** (fond semi-transparent, ils ne masquent pas le terrain). Ils ne s'affichent **que** lorsque le média détecté correspond à un appareil tactile de type smartphone :
+
+- **Paysage** : `pointer: coarse` + `orientation: landscape` + `max-width: 1024px`.
+- **Portrait** : `pointer: coarse` + `orientation: portrait`.
+- **Fallback petit écran tactile** : `pointer: coarse` + `max-width: 820px` (couvre tablettes compactes et cas limites).
+
+Ces contrôles sont **masqués sur desktop** (`display: none` par défaut), afin de ne pas encombrer l'écran lorsque le clavier est disponible.
+
+Justification :
+
+- `pointer: coarse` distingue un périphérique tactile d'une souris (précision fine) ; l'orientation discrimine smartphone paysage vs desktop.
+- La transparence préserve la lisibilité du jeu tout en restant utilisable.
+- `touch-action: none` et `overscroll-behavior: none` empêchent les gestes parasites (scroll, zoom) pendant le jeu.
+- Les boutons utilisent `touchstart`/`touchend` (avec fallback souris) pour une réactivité immédiate, sans délai de clic mobile.
 
 ---
 
@@ -272,11 +289,11 @@ Exemple (extrait, non à l'échelle) :
 - États `TITLE` / `PLAYING` / `PAUSED` / `GAME_OVER`.
 - Rendu pixel art procédural + HUD.
 - Sons générés (Web Audio).
+- **Compatibilité mobile** : contrôles tactiles transparents (D-pad + action) affichés sur smartphone (paysage ou portrait), masqués sur desktop.
 
 ### Évolutions futures
 - Niveaux multiples et progression de difficulté.
 - Fruits bonus à apparition temporisée.
-- Support tactile (glissements directionnels).
 - Sauvegarde du meilleur score (`localStorage`).
 - Chargement d'assets graphiques/sprites PNG optionnels.
 - Musique de fond et variantes sonores.
@@ -294,4 +311,6 @@ Exemple (extrait, non à l'échelle) :
 - [ ] La fin du niveau (toutes pastilles mangées) enchaîne vers le niveau suivant.
 - [ ] La perte de toutes les vies mène à l'écran `GAME_OVER`.
 - [ ] Le rendu est en pixel art net (pas de lissage).
+- [ ] Sur smartphone (paysage ou portrait), un D-pad et un bouton d'action transparents s'affichent et sont utilisables.
+- [ ] Sur desktop, les contrôles tactiles sont masqués et le clavier suffit à jouer.
 - [ ] Aucune dépendance externe n'est requise.
