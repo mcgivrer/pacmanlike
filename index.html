@@ -13,7 +13,7 @@
       <div class="hud-item"><span class="hud-label">Score</span><span id="score">0</span></div>
       <div class="hud-item"><span class="hud-label">Vies</span><span id="lives">3</span></div>
       <div class="hud-item"><span class="hud-label">Niveau</span><span id="level">1</span></div>
-      <button id="mute-btn" class="hud-mute" aria-label="Couper le son" title="Couper le son (M)">🔊</button>
+      <button id="settings-btn" class="hud-btn" aria-label="Paramètres" title="Paramètres">⚙</button>
     </header>
 
     <canvas id="game" width="224" height="248"></canvas>
@@ -44,6 +44,28 @@
       </div>
       <button id="touch-action" class="touch-action" aria-label="Démarrer / Pause">⏯</button>
     </nav>
+  <!-- Boîte de dialogue de paramètres (volume + mute musique) -->
+  <dialog id="settings-dialog" class="settings-dialog">
+    <form method="dialog" class="settings-form">
+      <h2 class="settings-title">Paramètres</h2>
+
+      <div class="settings-row">
+        <label for="volume" class="settings-label">Volume</label>
+        <input type="range" id="volume" min="0" max="100" value="18" class="settings-range">
+        <span id="volume-value" class="settings-value">18%</span>
+      </div>
+
+      <div class="settings-row">
+        <label for="mute-music" class="settings-label">Couper la musique</label>
+        <input type="checkbox" id="mute-music" class="settings-check">
+      </div>
+
+      <div class="settings-actions">
+        <button type="submit" value="close" class="settings-close" autofocus>Fermer</button>
+      </div>
+    </form>
+  </dialog>
+
   </div>
 
   <script type="module" src="main.js"></script>

@@ -204,6 +204,11 @@ export function createMusic() {
     if (master) master.gain.value = m ? 0 : volume;
   }
   function isMuted() { return muted; }
+  function setVolume(v) {
+    volume = Math.max(0, Math.min(1, v));
+    if (master) master.gain.value = muted ? 0 : volume;
+  }
+  function getVolume() { return volume; }
 
-  return { start, stop, setMuted, isMuted, get playing() { return playing; } };
+  return { start, stop, setMuted, isMuted, setVolume, getVolume, get playing() { return playing; } };
 }

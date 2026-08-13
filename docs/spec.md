@@ -223,9 +223,24 @@ Justification :
 
 Effets simples (manger une pastille, manger un fantôme, perdre une vie) générés via la même API Web Audio (oscillateurs courts). À implémenter avec la logique de jeu.
 
-#### 3.4.3 Contrôle du son
+#### 3.4.3 Boîte de dialogue de paramètres
 
-- Touche **`M`** (clavier) ou bouton son du HUD (icône haut-parleur) : coupe/restore le son.
+Une **boîte de dialogue de paramètres** (élément `<dialog>` natif du navigateur) est accessible depuis un bouton « ⚙ » du HUD. Elle expose :
+
+- **Curseur de volume** (0–100 %) réglant le gain du master audio en direct.
+- **Case « Couper la musique »** coupant/mettant en sourdine la musique.
+- **Bouton Fermer** validant et refermant la boîte.
+
+Les réglages sont **persistés dans `localStorage`** (`pacmanlike.audio`) : volume et état de mute sont restaurés au prochain chargement.
+
+Justification :
+
+- L'élément `<dialog>` natif gère l'accessibilité (focus, Échap pour fermer, backdrop modal) sans dépendance externe, et reste stylable en cohérence avec le rendu rétro.
+- La persistance évite de régler le volume à chaque session.
+
+#### 3.4.4 Raccourci clavier
+
+- Touche **`M`** : bascule le mute sans ouvrir la boîte de dialogue.
 - Mute automatique en pause ; restauration à la reprise.
 
 ---
@@ -403,4 +418,7 @@ Exemple (extrait, non à l'échelle) :
 - [ ] Sur desktop, les contrôles tactiles sont masqués et le clavier suffit à jouer.
 - [ ] Une manette (Gamepad API) connectée permet de jouer (croix/stick + bouton A/Start), avec détection auto à la connexion/déconnexion.
 - [ ] Un tutoriel de démarrage affiche les contrôles adaptés au device actif (clavier / manette / tactile) et se met à jour au changement de device.
+- [ ] Sons générés (Web Audio).
+- [ ] Une boîte de dialogue de paramètres permet de régler le volume et de couper la musique (persisté dans `localStorage`).
+- [ ] Le son peut être coupé/restauré par la touche `M` et est muté en pause.
 - [ ] Aucune dépendance externe n'est requise.

@@ -31,10 +31,71 @@ canvas.classList.add('source-canvas');
 // --- Musique chiptune générée procéduralement (Web Audio) ------------------
 const music = createMusic();
 
-// --- Contrôle du son (mute) -------------------------------------------------
-const muteBtn = document.getElementById('mute-btn');
-function syncMuteUI() { muteBtn.textContent = music.isMuted() ? '🔇' : '🔊'; muteBtn.classList.toggle('muted', music.isMuted()); }
-function toggleMute() { music.setMuted(!music.isMuted()); syncMuteUI(); }
+// --- Boîte de dialogue de paramètres (volume + mute musique) ----------------
+const settingsBtn = document.getElementById('settings-btn');
+const settingsDialog = document.getElementById('settings-dialog');
+const volumeRange = document.getElementById('volume');
+const volumeValue = document.getElementById('volume-value');
+const muteMusicCheck = document.getElementById('mute-music');
+
+// Persistance des réglages audio dans localStorage.
+const SETTINGS_KEY = 'pacmanlike.audio';
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return { volume: s.volume != null ? s.volume : 0.18, muted: !!s.muted };
+  } catch { return { volume: 0.18, muted: false }; }
+}
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    volume: music.getVolume(),
+    muted: music.isMuted(),
+  }));
+}
+
+// Applique un état à la fois au moteur audio et à l'UI.
+function applyVolume(v01) {
+  music.setVolume(v01);
+  volumeRange.value = Math.round(v01 * 100);
+  volumeValue.textContent = `${Math.round(v01 * 100)}%`;
+}
+function applyMuted(m) {
+  music.setMuted(m);
+  muteMusicCheck.checked = m;
+}
+function syncSettingsUI() {
+  applyVolume(music.getVolume());
+  applyMuted(music.isMuted());
+}
+
+// Init depuis le stockage (avant tout démarrage audio).
+const saved = loadSettings();
+applyVolume(saved.volume);
+applyMuted(saved.muted);
+
+// Ouverture / fermeture de la boîte de dialogue.
+settingsBtn.addEventListener('click', () => {
+  syncSettingsUI();
+  settingsDialog.showModal();
+});
+// Le bouton "Fermer" (type=submit value=close) ferme via method="dialog".
+settingsDialog.addEventListener('close', saveSettings);
+
+// Slider de volume: applique en direct + sauvegarde.
+volumeRange.addEventListener('input', () => {
+  applyVolume(Number(volumeRange.value) / 100);
+  saveSettings();
+});
+// Checkbox mute: applique en direct + sauvegarde.
+muteMusicCheck.addEventListener('change', () => {
+  applyMuted(muteMusicCheck.checked);
+  saveSettings();
+});
+
+// Raccourci clavier M: bascule le mute sans ouvrir la boîte.
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') { applyMuted(!music.isMuted()); saveSettings(); e.preventDefault(); }
+});
 muteBtn.addEventListener('click', toggleMute);
 window.addEventListener('keydown', (e) => {
   if (e.key === 'm' || e.key === 'M') { toggleMute(); e.preventDefault(); }
