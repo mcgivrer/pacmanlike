@@ -135,9 +135,29 @@ Justification :
 
 Justification : le pixel art est peu coûteux à produire, cohérent avec l'esthétique rétro demandée, et performant à l'affichage.
 
+### 3.1.bis Rendu WebGL et post-traitement CRT
+
+Le rendu passe par **WebGL1** : le jeu est dessiné sur un canvas 2D de basse résolution (source), puis échantillonné comme texture par un canvas WebGL d'affichage qui applique un **shader de fragment simulant un moniteur CRT**.
+
+Effets du shader CRT (`shaders/crt.glsl.js`) :
+
+- **Distorsion de barillet** (courbure d'écran) : les UV sont écartées vers le centre ; les bords hors-tube sont noirs.
+- **Vignettage** des coins (assombrissement radial).
+- **Lignes de balayage** (scanlines) : modulation sinusoïdale selon la résolution d'affichage.
+- **Aberration chromatique** : séparation des canaux RGB sur les bords (effet de prisme du tube).
+- **Scintillement** (flicker) basse fréquence (deux sinus incommensurables).
+- **Glitches de balayage** : déclenchement sporadique d'une bande horizontale décalée latéralement (décalage `x` doux sur les bords de la bande), typique des perturbations de balayage CRT.
+
+Justification :
+
+- Un shader unique en une passe plein écran (quad) reste performant et sans dépendance (WebGL1 est supporté partout).
+- La basse résolution de la source conserve l'esthétique pixel art ; le shader CRT ajoute l'illusion du tube sans alourdir la logique de jeu.
+- Les glitches de balayage sont générés côté CPU (déclenchement aléatoire, durée courte) puis passés au shader via un uniform `vec3` (position de bande, amplitude de décalage, activation) : simple et déterministe par frame.
+- Fallback : si WebGL est indisponible, le canvas 2D source reste visible (rendu sans effet CRT).
+
 ### 3.2 Sans dépendance externe
 
-Aucune bibliothèque de jeu (Phaser, PixiJS…) ni framework. Tout est en **JavaScript vanilla** et Canvas 2D.
+Aucune bibliothèque de jeu (Phaser, PixiJS…) ni framework. Le moteur est en **JavaScript vanilla** : rendu de jeu sur Canvas 2D, post-trichage d'affichage via **WebGL1** (shaders GLSL).
 
 Justification :
 

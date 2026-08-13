@@ -50,12 +50,21 @@ html, body {
 .hud-item { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
 .hud-label { font-size: 10px; opacity: 0.6; text-transform: uppercase; }
 
-/* --- Canvas pixel art --- */
+/* --- Canvas pixel art (source 2D masquée, rendue comme texture WebGL) --- */
 #game {
   background: var(--bg);
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  /* Taille d'affichage ajustée par le JS selon la fenêtre; on garde un ratio. */
+  /* Le canvas 2D sert de source au renderer CRT; on le masque. */
+  display: none;
+}
+.source-canvas { display: none; }
+
+/* --- Canvas d'affichage WebGL (rendu CRT) --- */
+#crt {
+  background: #000;
+  /* Lissage volontaire: le shader CRT gère scanlines & courbure. */
+  image-rendering: auto;
   width: min(96vw, 56vh);
   aspect-ratio: 224 / 248;
   max-width: 672px;
@@ -154,7 +163,7 @@ html, body {
    --------------------------------------------------------------------------- */
 @media (pointer: coarse) and (orientation: landscape) and (max-width: 1024px) {
   .touch-controls { display: block; }
-  #game { width: min(70vw, 92vh); }
+  #crt { width: min(70vw, 92vh); }
 }
 
 /* ---------------------------------------------------------------------------
@@ -163,7 +172,7 @@ html, body {
    --------------------------------------------------------------------------- */
 @media (pointer: coarse) and (orientation: portrait) {
   .touch-controls { display: block; }
-  #game { width: 96vw; }
+  #crt { width: 96vw; }
 }
 
 /* ---------------------------------------------------------------------------

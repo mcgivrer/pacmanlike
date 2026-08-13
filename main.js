@@ -8,6 +8,8 @@
  * jouable et la compatibilité mobile avec contrôles tactiles.
  * ========================================================================== */
 
+import { createCRTRenderer } from './crt.js';
+
 const CELL = 8;                 // taille d'une cellule en px (résolution logique)
 const COLS = 28;                // 224 / 8
 const ROWS = 31;                // 248 / 8
@@ -17,6 +19,12 @@ const STEP = 1 / 60;            // pas de simulation fixe (s)
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
+
+// --- Rendu CRT (post-traitement WebGL) ----------------------------------
+// Le canvas 2D sert de source; le canvas WebGL créé par le renderer devient
+// l'affichage visible. On masque le canvas 2D source.
+const crt = createCRTRenderer(canvas);
+canvas.classList.add('source-canvas');
 
 // --- Labyrinthe simplifié (1 = mur, 0 = vide) -------------------------------
 // Grille 28x31 générée par bordure + quelques murs internes pour la démo.
@@ -232,6 +240,7 @@ function loop(now) {
     acc -= STEP;
   }
   render();
+  if (crt.enabled) crt.render(last / 1000);
   requestAnimationFrame(loop);
 }
 
