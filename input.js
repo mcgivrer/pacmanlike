@@ -143,5 +143,7 @@ export function createInput({ onDirection, onAction, onDeviceChange }) {
     pollGamepad,
     bindTouchButton,
     setDevice,
+    setDirection,
+    pressAction,
   };
 }
