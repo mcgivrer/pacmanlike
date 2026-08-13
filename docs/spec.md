@@ -102,6 +102,7 @@ Justification : ces comportements sont les patterns historiques éprouvés ; ils
 |---|---|---|
 | Desktop | Déplacement | Flèches ou WASD (AZERTY: ZQSD) |
 | Desktop | Pause | `P` ou `Échap` |
+| Desktop | Couper le son | `M` (bouton haut-parleur du HUD) |
 | Desktop | Démarrer / Rejouer | `Espace` / `Entrée` |
 | Smartphone | Déplacement | D-pad tactile transparent (croix directionnelle) |
 | Smartphone | Démarrer / Pause | Bouton tactile d'action (`⏯`) |
@@ -196,9 +197,36 @@ Les sprites simples (dots, pastilles, personnages) peuvent être **générés pa
 
 Un fichier d'assets graphiques (PNG) reste une option d'évolution si l'on souhaite un rendu plus détaillé.
 
-### 3.4 Sons
+### 3.4 Sons et musique chiptune
 
-Effets sonores simples (manger une pastille, manger un fantôme, perdre une vie) générés via l'**API Web Audio** (oscillateurs programmés), sans fichiers audio externes. Une bande-son optionnelle peut être ajoutée plus tard.
+Tout l'audio est **généré procéduralement** via l'**API Web Audio** (oscillateurs programmés), sans aucun fichier audio externe.
+
+#### 3.4.1 Musique chiptune générée aléatoirement
+
+Une **boucle musicale chiptune** est générée aléatoirement à chaque partie, en respectant des règles d'harmonie simples pour rester consonnante (`music.js`) :
+
+- **Gamme de La mineur naturel** (A B C D E F G, aucune altération) : sonorité « arcade » familière.
+- **Progression d'accords en boucle** sur 4 mesures : **I (Am) → IV (F) → V (G) → I (Am)**. Le V (dominante) résout naturellement sur le I, ce qui rend la boucle circulaire et stable.
+- **Basse** : fondamentale de chaque accord, note longue par mesure (onde triangle, octave grave).
+- **Mélodie** : tirée parmi les notes de l'accord courant (notes « concordantes ») pour 80 %, avec 20 % de **notes de passage** (ton voisin dans la gamme, mouvement conjoint) pour le mouvement. Rythme sur un motif 16 pas/mesure avec silences ; densité plus forte sur les temps.
+- **Timbres** : onde **carrée** (mélodie, perçante) et **triangle** (basse, douce), enveloppes ADSR courtes — typiques du son chiptune 8-bit.
+- **Tempo** ~140 BPM, signature 4/4, boucle d'environ 6,9 s.
+- **Graine aléatoire** (LCG) différente à chaque partie : la boucle change tout en restant musicalement cohérente.
+
+Justification :
+
+- La génération procédurale évite tout asset audio externe (autonomie du projet) tout en offrant une bande-son variée (pas de répétition lassante entre parties).
+- Les contraintes harmoniques (gamme + triades + progression I-IV-V-I + notes concordantes) garantissent la consonnance même avec un générateur aléatoire, sans nécessiter un moteur musical complexe.
+- Le démarrage est déclenché au premier geste utilisateur (`startGame()`) pour respecter la **politique d'autoplay** des navigateurs ; la musique est **mutée en pause** et restaurée à la reprise.
+
+#### 3.4.2 Effets sonores
+
+Effets simples (manger une pastille, manger un fantôme, perdre une vie) générés via la même API Web Audio (oscillateurs courts). À implémenter avec la logique de jeu.
+
+#### 3.4.3 Contrôle du son
+
+- Touche **`M`** (clavier) ou bouton son du HUD (icône haut-parleur) : coupe/restore le son.
+- Mute automatique en pause ; restauration à la reprise.
 
 ---
 
@@ -215,6 +243,7 @@ Structure **actuelle** (squelette jouable, fichiers à la racine) :
 ├── styles.css           // Mise en page, pixel art, contrôles tactiles transparents, media queries mobiles
 ├── main.js              // Point d'entrée: boucle à pas fixe, joueur déplaçable, overlay/états, tutoriel adaptatif
 ├── input.js             // Entrées unifiées: clavier + tactile + gamepad (Gamepad API), détection du device actif
+├── music.js             // Musique chiptune générée procéduralement (Web Audio, gamme + progression harmonique)
 ├── crt.js               // Renderer WebGL1: quad plein écran, texture depuis #game, gestion des glitches de balayage
 └── shaders/
     └── crt.glsl.js       // Vertex + fragment shaders CRT (GLSL exporté en chaînes JS)
@@ -353,7 +382,6 @@ Exemple (extrait, non à l'échelle) :
 - Fruits bonus à apparition temporisée.
 - Sauvegarde du meilleur score (`localStorage`).
 - Chargement d'assets graphiques/sprites PNG optionnels.
-- Musique de fond et variantes sonores.
 - Mode multijoueur local (alterné ou simultané) — hors périmètre V1.
 
 ---

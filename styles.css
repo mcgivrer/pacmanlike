@@ -50,6 +50,22 @@ html, body {
 .hud-item { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
 .hud-label { font-size: 10px; opacity: 0.6; text-transform: uppercase; }
 
+.hud-mute {
+  margin-left: 0.5rem;
+  background: none;
+  border: 1px solid rgba(255, 255, 0, 0.3);
+  border-radius: 6px;
+  color: #ffff00;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+.hud-mute:active { background: rgba(255, 255, 0, 0.15); }
+.hud-mute.muted { opacity: 0.5; }
+
 /* --- Canvas pixel art (source 2D masquée, rendue comme texture WebGL) --- */
 #game {
   background: var(--bg);

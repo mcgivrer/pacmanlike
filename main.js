@@ -10,6 +10,7 @@
 
 import { createCRTRenderer } from './crt.js';
 import { createInput, InputDevice } from './input.js';
+import { createMusic } from './music.js';
 
 const CELL = 8;                 // taille d'une cellule en px (résolution logique)
 const COLS = 28;                // 224 / 8
@@ -26,6 +27,19 @@ ctx.imageSmoothingEnabled = false;
 // l'affichage visible. On masque le canvas 2D source.
 const crt = createCRTRenderer(canvas);
 canvas.classList.add('source-canvas');
+
+// --- Musique chiptune générée procéduralement (Web Audio) ------------------
+const music = createMusic();
+
+// --- Contrôle du son (mute) -------------------------------------------------
+const muteBtn = document.getElementById('mute-btn');
+function syncMuteUI() { muteBtn.textContent = music.isMuted() ? '🔇' : '🔊'; muteBtn.classList.toggle('muted', music.isMuted()); }
+function toggleMute() { music.setMuted(!music.isMuted()); syncMuteUI(); }
+muteBtn.addEventListener('click', toggleMute);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') { toggleMute(); e.preventDefault(); }
+});
+syncMuteUI();
 
 // --- Labyrinthe simplifié (1 = mur, 0 = vide) -------------------------------
 // Grille 28x31 générée par bordure + quelques murs internes pour la démo.
@@ -135,9 +149,11 @@ function togglePause() {
   if (state === STATE.PLAYING) {
     state = STATE.PAUSED;
     showOverlay('Pause', 'Appuie pour reprendre');
+    music.setMuted(true);
   } else if (state === STATE.PAUSED) {
     state = STATE.PLAYING;
     hideOverlay();
+    music.setMuted(false);
   }
 }
 
@@ -150,6 +166,10 @@ function startGame() {
   updateHud();
   state = STATE.PLAYING;
   hideOverlay();
+  // Démarre la musique au premier démarrage (geste utilisateur requis par
+  // la politique d'autoplay des navigateurs). Boucle différente à chaque partie.
+  if (!music.playing) music.start();
+  music.setMuted(false);
 }
 
 function updateHud() {
