@@ -166,7 +166,7 @@ html, body {
   display: none;           /* cachés sur desktop par défaut */
   position: fixed;
   inset: 0;
-  z-index: 15;
+  z-index: 30;            /* au-dessus de l'overlay pour rester cliquable sur l'écran de titre */
   pointer-events: none;   /* le conteneur ne capture pas, ses boutons oui */
 }
 
