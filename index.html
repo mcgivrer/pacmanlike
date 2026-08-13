@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>PacmanLike</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="game-frame">
+    <header id="hud">
+      <div class="hud-item"><span class="hud-label">Score</span><span id="score">0</span></div>
+      <div class="hud-item"><span class="hud-label">Vies</span><span id="lives">3</span></div>
+      <div class="hud-item"><span class="hud-label">Niveau</span><span id="level">1</span></div>
+    </header>
+
+    <canvas id="game" width="224" height="248"></canvas>
+
+    <!-- Écran d'overlay (titre / pause / game over) -->
+    <div id="overlay" class="overlay visible">
+      <div class="overlay-card">
+        <h1 id="overlay-title">PacmanLike</h1>
+        <p id="overlay-message">Appuie sur Espace pour jouer</p>
+      </div>
+    </div>
+
+    <!-- Contrôles tactiles transparents (visibles uniquement sur smartphone) -->
+    <nav id="touch-controls" class="touch-controls" aria-label="Contrôles tactiles">
+      <div class="dpad">
+        <button class="dpad-btn dpad-up"    data-dir="up"    aria-label="Haut">▲</button>
+        <button class="dpad-btn dpad-left"  data-dir="left"  aria-label="Gauche">◀</button>
+        <button class="dpad-btn dpad-down"  data-dir="down"  aria-label="Bas">▼</button>
+        <button class="dpad-btn dpad-right" data-dir="right" aria-label="Droite">▶</button>
+      </div>
+      <button id="touch-action" class="touch-action" aria-label="Démarrer / Pause">⏯</button>
+    </nav>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
