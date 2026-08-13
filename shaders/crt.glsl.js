@@ -31,7 +31,7 @@ uniform float u_time;
 uniform vec3  u_glitch; // x = bandY, y = shiftX, z = active (0/1)
 
 // Distorsion de barillet: écarte les UV vers le centre pour courber l'écran.
-// `amount` contrôle la courbure (0 = écran plat).
+// 'amount' contrôle la courbure (0 = écran plat).
 vec2 barrel(vec2 uv, float amount) {
   vec2 c = uv - 0.5;
   float r2 = dot(c, c);

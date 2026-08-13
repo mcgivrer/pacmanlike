@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>PacmanLike (autonome)</title>
+  <style>
+/* ===========================================================================
+   PacmanLike — styles
+   Pixel art rétro + contrôles tactiles transparents réactifs au média.
+   =========================================================================== */
+
+:root {
+  --bg: #000000;
+  --fg: #ffff00;
+  --accent: #2121ff;
+  --overlay-bg: rgba(0, 0, 0, 0.78);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Courier New", monospace;
+  /* Empêche les gestes parasites (zoom, scroll) sur mobile pendant le jeu. */
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  height: 100%;
+}
+
+#game-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* --- HUD --- */
+#hud {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 0.4rem;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+.hud-item { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.hud-label { font-size: 10px; opacity: 0.6; text-transform: uppercase; }
+
+.hud-btn {
+  margin-left: 0.5rem;
+  background: none;
+  border: 1px solid rgba(255, 255, 0, 0.3);
+  border-radius: 6px;
+  color: #ffff00;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 7px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+.hud-btn:active { background: rgba(255, 255, 0, 0.15); }
+
+/* --- Boîte de dialogue de paramètres --- */
+.settings-dialog {
+  background: #0a0a14;
+  color: #ffff00;
+  border: 2px solid rgba(255, 255, 0, 0.5);
+  border-radius: 8px;
+  padding: 1.2rem 1.4rem;
+  max-width: 90vw;
+  width: 340px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+}
+.settings-dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+.settings-title { margin: 0 0 1rem; font-size: 18px; text-align: center; letter-spacing: 1px; }
+.settings-form { display: flex; flex-direction: column; gap: 1rem; }
+.settings-row { display: flex; align-items: center; gap: 0.6rem; }
+.settings-label { flex: 0 0 auto; font-size: 13px; min-width: 8.5em; }
+.settings-range { flex: 1; accent-color: #ffff00; }
+.settings-value { flex: 0 0 auto; min-width: 3em; text-align: right; font-size: 12px; opacity: 0.85; }
+.settings-check { width: 18px; height: 18px; accent-color: #ffff00; }
+.settings-actions { display: flex; justify-content: center; margin-top: 0.4rem; }
+.settings-close {
+  background: rgba(255, 255, 0, 0.12);
+  border: 1px solid rgba(255, 255, 0, 0.6);
+  border-radius: 6px;
+  color: #ffff00;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 18px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.settings-close:active { background: rgba(255, 255, 0, 0.25); }
+
+/* --- Canvas pixel art (source 2D masquée, rendue comme texture WebGL) --- */
+#game {
+  background: var(--bg);
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  /* Le canvas 2D sert de source au renderer CRT; on le masque. */
+  display: none;
+}
+.source-canvas { display: none; }
+
+/* --- Canvas d'affichage WebGL (rendu CRT) --- */
+#crt {
+  background: #000;
+  /* Lissage volontaire: le shader CRT gère scanlines & courbure. */
+  image-rendering: auto;
+  width: min(96vw, 56vh);
+  aspect-ratio: 224 / 248;
+  max-width: 672px;
+  display: block;
+}
+
+/* --- Overlay (titre / pause / game over) --- */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay-bg);
+  z-index: 20;
+}
+.overlay.visible { display: flex; }
+.overlay-card { text-align: center; padding: 1rem; }
+.overlay-card h1 { margin: 0 0 0.5rem; font-size: clamp(20px, 6vw, 40px); }
+.overlay-card p  { margin: 0; opacity: 0.85; font-size: clamp(12px, 3vw, 16px); }
+
+/* --- Tutoriel de contrôles (adapté au device) --- */
+.tutorial {
+  margin-top: 1.2rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(255, 255, 0, 0.2);
+  text-align: left;
+}
+.tutorial-title { font-size: clamp(11px, 2.6vw, 14px); margin: 0 0 0.5rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; }
+.tutorial-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.tutorial-list li { font-size: clamp(10px, 2.4vw, 13px); line-height: 1.3; opacity: 0.85; }
+.tutorial-list .key {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 1px 6px;
+  margin: 0 1px;
+  border: 1px solid rgba(255, 255, 0, 0.5);
+  border-radius: 4px;
+  background: rgba(255, 255, 0, 0.08);
+  color: #ffff00;
+  font-weight: bold;
+  text-align: center;
+}
+.tutorial-list .lbl { opacity: 0.65; }
+
+/* ===========================================================================
+   Contrôles tactiles — transparents par défaut, affichés uniquement
+   lorsque le média correspond à un smartphone (paysage OU portrait).
+   =========================================================================== */
+.touch-controls {
+  display: none;           /* cachés sur desktop par défaut */
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;   /* le conteneur ne capture pas, ses boutons oui */
+}
+
+/* D-pad croix directionnelle, en bas à gauche, semi-transparent. */
+.dpad {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  width: 38vmin;
+  height: 38vmin;
+  pointer-events: none;
+}
+.dpad-btn {
+  position: absolute;
+  width: 38%;
+  height: 38%;
+  border: none;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 0, 0.55);
+  font-size: 7vmin;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  transition: background 80ms, transform 80ms;
+}
+.dpad-btn:active,
+.dpad-btn.pressed {
+  background: rgba(255, 255, 0, 0.22);
+  color: rgba(255, 255, 0, 0.9);
+  transform: scale(0.94);
+}
+.dpad-up    { top: 0;    left: 31%; }
+.dpad-left  { top: 31%;  left: 0; }
+.dpad-right { top: 31%;  right: 0; }
+.dpad-down  { bottom: 0; left: 31%; }
+
+/* Bouton d'action (start/pause), en bas à droite, semi-transparent. */
+.touch-action {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: 22vmin;
+  height: 22vmin;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 0, 0.08);
+  color: rgba(255, 255, 0, 0.6);
+  font-size: 9vmin;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.touch-action:active { background: rgba(255, 255, 0, 0.25); transform: scale(0.94); }
+
+/* ---------------------------------------------------------------------------
+   1) Smartphone en PAYSAGE : largeur <= 1024px ET orientation paysage
+      (hauteur <= largeur), et au moins un côté tactile.
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) and (orientation: landscape) and (max-width: 1024px) {
+  .touch-controls { display: block; }
+  #crt { width: min(70vw, 92vh); }
+}
+
+/* ---------------------------------------------------------------------------
+   2) Smartphone en PORTRAIT : pointer coarse + orientation portrait
+      (largeur < hauteur). On bascule le jeu en largeur pleine pour la place.
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) and (orientation: portrait) {
+  .touch-controls { display: block; }
+  #crt { width: 96vw; }
+}
+
+/* ---------------------------------------------------------------------------
+   3) Fallback « petit écran tactile » : tout appareil tactile avec un
+      petit viewport (largeur <= 820px), quelle que soit l'orientation.
+      Couvre notamment les tablettes en mode compact et les cas limites.
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) and (max-width: 820px) {
+  .touch-controls { display: block; }
+}
+
+  </style>
+</head>
+<body>
+<div id="game-frame">
+    <header id="hud">
+      <div class="hud-item"><span class="hud-label">Score</span><span id="score">0</span></div>
+      <div class="hud-item"><span class="hud-label">Vies</span><span id="lives">3</span></div>
+      <div class="hud-item"><span class="hud-label">Niveau</span><span id="level">1</span></div>
+      <button id="settings-btn" class="hud-btn" aria-label="Paramètres" title="Paramètres">⚙</button>
+    </header>
+
+    <canvas id="game" width="224" height="248"></canvas>
+
+    <!-- Écran d'overlay (titre / pause / game over + tutoriel de démarrage) -->
+    <div id="overlay" class="overlay visible">
+      <div class="overlay-card">
+        <h1 id="overlay-title">PacmanLike</h1>
+        <p id="overlay-message">Appuie pour jouer</p>
+
+        <!-- Tutoriel de contrôles (adapté au device d'entrée détecté) -->
+        <div id="tutorial" class="tutorial">
+          <h2 class="tutorial-title">Comment jouer</h2>
+          <ul id="tutorial-list" class="tutorial-list">
+            <!-- Contenu généré dynamiquement selon le device (clavier/manette/tactile) -->
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contrôles tactiles transparents (visibles uniquement sur smartphone) -->
+    <nav id="touch-controls" class="touch-controls" aria-label="Contrôles tactiles">
+      <div class="dpad">
+        <button class="dpad-btn dpad-up"    data-dir="up"    aria-label="Haut">▲</button>
+        <button class="dpad-btn dpad-left"  data-dir="left"  aria-label="Gauche">◀</button>
+        <button class="dpad-btn dpad-down"  data-dir="down"  aria-label="Bas">▼</button>
+        <button class="dpad-btn dpad-right" data-dir="right" aria-label="Droite">▶</button>
+      </div>
+      <button id="touch-action" class="touch-action" aria-label="Démarrer / Pause">⏯</button>
+    </nav>
+  <!-- Boîte de dialogue de paramètres (volume + mute musique) -->
+  <dialog id="settings-dialog" class="settings-dialog">
+    <form method="dialog" class="settings-form">
+      <h2 class="settings-title">Paramètres</h2>
+
+      <div class="settings-row">
+        <label for="volume" class="settings-label">Volume</label>
+        <input type="range" id="volume" min="0" max="100" value="18" class="settings-range">
+        <span id="volume-value" class="settings-value">18%</span>
+      </div>
+
+      <div class="settings-row">
+        <label for="mute-music" class="settings-label">Couper la musique</label>
+        <input type="checkbox" id="mute-music" class="settings-check">
+      </div>
+
+      <div class="settings-actions">
+        <button type="submit" value="close" class="settings-close" autofocus>Fermer</button>
+      </div>
+    </form>
+  </dialog>
+
+  </div>
+
+  
+  <script>
+/* ===========================================================================
+ * Shaders CRT pour PacmanLike
+ * Exportés en chaînes JS (pas de loader de fichiers .glsl côté navigateur).
+ * ========================================================================== */
+
+// Vertex shader: simple quad plein écran + transmission des UV.
+const CRT_VERTEX = `
+attribute vec2 a_pos;
+attribute vec2 a_uv;
+varying vec2 v_uv;
+void main() {
+  v_uv = a_uv;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+`;
+
+// Fragment shader: effet moniteur CRT.
+//  - distorsion de barillet (courbure d'écran)
+//  - vignettage des coins
+//  - lignes de balayage (scanlines)
+//  - séparation des canaux RGB (chromatic aberration) sur les bords
+//  - scintillement global (flicker) basse fréquence
+//  - glitches de balayage: bande horizontale décalée ponctuellement
+const CRT_FRAGMENT = `
+precision mediump float;
+varying vec2 v_uv;
+
+uniform sampler2D u_tex;
+uniform vec2  u_resolution;
+uniform float u_time;
+uniform vec3  u_glitch; // x = bandY, y = shiftX, z = active (0/1)
+
+// Distorsion de barillet: écarte les UV vers le centre pour courber l'écran.
+// 'amount' contrôle la courbure (0 = écran plat).
+vec2 barrel(vec2 uv, float amount) {
+  vec2 c = uv - 0.5;
+  float r2 = dot(c, c);
+  uv = uv + c * r2 * amount;
+  return uv;
+}
+
+void main() {
+  // Courbure d'écran (légère) + vignettage lié.
+  vec2 uv = barrel(v_uv, 0.12);
+
+  // En dehors de l'écran courbé -> noir (bord du tube).
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    return;
+  }
+
+  // --- Glitch de balayage: bande horizontale décalée ----------------------
+  float bandY = u_glitch.x;
+  float shiftX = u_glitch.y;
+  float gActive = u_glitch.z;
+  // Largeur de la bande perturbée.
+  float bandHalf = 0.04;
+  float bandMask = step(abs(uv.y - bandY), bandHalf) * gActive;
+  // Décalage horizontal progressif (doux sur les bords de la bande).
+  float soft = smoothstep(bandHalf, 0.0, abs(uv.y - bandY));
+  uv.x += shiftX * soft * bandMask;
+
+  // --- Aberration chromatique (séparation RGB sur les bords) ---------------
+  float dist = length(uv - 0.5);
+  float aberr = 0.0015 + dist * 0.004;
+  vec3 col;
+  col.r = texture2D(u_tex, uv + vec2( aberr, 0.0)).r;
+  col.g = texture2D(u_tex, uv).g;
+  col.b = texture2D(u_tex, uv + vec2(-aberr, 0.0)).b;
+
+  // --- Lignes de balayage (scanlines) -------------------------------------
+  // On utilise la résolution d'affichage pour une densité cohérente.
+  float line = sin(uv.y * u_resolution.y * 3.14159) * 0.5 + 0.5;
+  col *= mix(1.0, line, 0.35);
+
+  // --- Scintillement (flicker) basse fréquence ----------------------------
+  float flicker = 1.0 - 0.04 * (0.5 + 0.5 * sin(u_time * 31.0))
+                     - 0.03 * (0.5 + 0.5 * sin(u_time * 113.0 + 2.0));
+  col *= flicker;
+
+  // --- Vignettage des coins -----------------------------------------------
+  float vig = smoothstep(0.85, 0.35, dist);
+  col *= vig;
+
+  // Léger reflet de tube (dégradé diagonal subtil).
+  col += 0.02 * smoothstep(0.7, 0.0, uv.x) * smoothstep(0.7, 0.0, uv.y);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+
+/* ===========================================================================
+ * PacmanLike — post-traitement CRT via WebGL
+ *
+ * Le jeu est rendu sur un canvas 2D (`#game`) servant de texture source.
+ * Ce module crée un canvas WebGL (`#crt`) qui:
+ *   1. affiche la texture (passe quad plein écran),
+ *   2. applique un shader de fragment simulant un moniteur CRT:
+ *        - distorsion de barillet (courbure),
+ *        - vignettage,
+ *        - lignes de balayage (scanlines),
+ *        - séparation des canaux RGB (chromatic aberration),
+ *        - scintillement (flicker),
+ *        - glitches occasionnels liés au balayage (bandes décalées,
+ *          déplacement horizontal transitoire).
+ *
+ * Aucune dépendance externe: WebGL1 vanilla, attributs/uniformes minimisés.
+ * ========================================================================== */
+
+/** Crée et configure le rendu CRT au-dessus du canvas de jeu source. */
+function createCRTRenderer(sourceCanvas) {
+  const display = document.createElement('canvas');
+  display.id = 'crt';
+  // Taille logique interne = celle du jeu; affichage géré par le CSS.
+  display.width = sourceCanvas.width;
+  display.height = sourceCanvas.height;
+  // On insère le canvas CRT juste après le canvas de jeu dans le DOM.
+  sourceCanvas.parentElement.insertBefore(display, sourceCanvas.nextSibling);
+
+  const gl = display.getContext('webgl', { antialias: false, premultipliedAlpha: false });
+  if (!gl) {
+    // Fallback: pas de WebGL -> on garde simplement le canvas 2D visible.
+    display.remove();
+    console.warn('WebGL non disponible, rendu CRT désactivé.');
+    return { render() {}, resize() {}, enabled: false };
+  }
+
+  // --- Programme shader -----------------------------------------------------
+  const program = compileProgram(gl, CRT_VERTEX, CRT_FRAGMENT);
+  gl.useProgram(program);
+
+  const aPos = gl.getAttribLocation(program, 'a_pos');
+  const aUv = gl.getAttribLocation(program, 'a_uv');
+
+  // Quad plein écran (deux triangles), UV en unité de texture.
+  const quad = new Float32Array([
+    // pos     uv
+    -1, -1, 0, 1,
+     1, -1, 1, 1,
+    -1,  1, 0, 0,
+    -1,  1, 0, 0,
+     1, -1, 1, 1,
+     1,  1, 1, 0,
+  ]);
+  const vbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, quad, gl.STATIC_DRAW);
+
+  const stride = 4 * 4; // 4 floats * 4 octets
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, stride, 0);
+  gl.enableVertexAttribArray(aUv);
+  gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, stride, 2 * 4);
+
+  // --- Texture source (canvas 2D) ------------------------------------------
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  // --- Uniformes ------------------------------------------------------------
+  const uTex = gl.getUniformLocation(program, 'u_tex');
+  const uRes = gl.getUniformLocation(program, 'u_resolution');
+  const uTime = gl.getUniformLocation(program, 'u_time');
+  const uGlitch = gl.getUniformLocation(program, 'u_glitch');
+
+  gl.uniform1i(uTex, 0);
+
+  // --- État des glitches (générés aléatoirement) ---------------------------
+  let glitchUntil = 0;     // timestamp de fin du glitch courant
+  let glitchBand = 0;      // position Y (0..1) de la bande décalée
+  let glitchShift = 0;     // amplitude du décalage horizontal
+  let nextGlitchAt = 3 + Math.random() * 7; // prochain déclenchement (s)
+
+  /** Met à jour la taille du canvas d'affichage selon l'élément DOM. */
+  function resize() {
+    const w = display.clientWidth | 0;
+    const h = display.clientHeight | 0;
+    if (display.width !== w || display.height !== h) {
+      display.width = w;
+      display.height = h;
+    }
+    gl.viewport(0, 0, display.width, display.height);
+  }
+
+  /** Rendu CRT: échantillonne la texture du canvas de jeu et applique l'effet. */
+  function render(timeSec) {
+    resize();
+
+    // Gestion des glitches de balayage: déclenchement sporadique.
+    if (timeSec > nextGlitchAt && timeSec > glitchUntil) {
+      glitchUntil = timeSec + 0.08 + Math.random() * 0.18; // durée courte
+      glitchBand = Math.random();
+      glitchShift = (Math.random() * 2 - 1) * 0.018;
+      nextGlitchAt = timeSec + 4 + Math.random() * 9;
+    }
+    const glitchActive = timeSec < glitchUntil ? 1.0 : 0.0;
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    // On recharge la texture depuis le canvas 2D à chaque frame.
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
+
+    gl.uniform2f(uRes, display.width, display.height);
+    gl.uniform1f(uTime, timeSec);
+    // on passe band, shift, active via un vec3 (z = active)
+    gl.uniform3f(uGlitch, glitchBand, glitchShift, glitchActive);
+
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  return { render, resize, enabled: true, display };
+}
+
+// --- Compilation des shaders ------------------------------------------------
+function compileShader(gl, type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(sh);
+    gl.deleteShader(sh);
+    throw new Error('Erreur de compilation shader: ' + log);
+  }
+  return sh;
+}
+
+function compileProgram(gl, vsSrc, fsSrc) {
+  const vs = compileShader(gl, gl.VERTEX_SHADER, vsSrc);
+  const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSrc);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    const log = gl.getProgramInfoLog(prog);
+    gl.deleteProgram(prog);
+    throw new Error('Erreur de link programme: ' + log);
+  }
+  gl.deleteShader(vs);
+  gl.deleteShader(fs);
+  return prog;
+}
+
+
+/* ===========================================================================
+ * PacmanLike — gestion des entrées (clavier, tactile, gamepad)
+ *
+ * Détecte le device d'entrée actif et expose une API unifiée:
+ *   - setDirection(name) : orienter le joueur (up/down/left/right)
+ *   - pressAction()       : démarrer / pause / rejouer
+ *
+ * Le "device actif" est déterminé par la dernière source d'entrée utilisée,
+ * avec priorité: gamepad connecté > tactile (pointeur coarse) > clavier.
+ * Le tutoriel de démarrage s'adapte à ce device (cf. updateTutorial).
+ * ========================================================================== */
+const InputDevice = { KEYBOARD: 'keyboard', TOUCH: 'touch', GAMEPAD: 'gamepad' };
+function createInput({ onDirection, onAction, onDeviceChange }) {
+  // Device actif par défaut: tactile si pointeur coarse, sinon clavier.
+  let activeDevice = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+    ? InputDevice.TOUCH
+    : InputDevice.KEYBOARD;
+
+  let gamepadIndex = null;       // index du gamepad actuellement utilisé
+  let prevButtons = [];          // état précédent des boutons (détection front montant)
+
+  function setDevice(d) {
+    if (d === activeDevice) return;
+    activeDevice = d;
+    if (onDeviceChange) onDeviceChange(d);
+  }
+
+  // --- API publique ---------------------------------------------------------
+  function setDirection(name) { if (onDirection) onDirection(name); }
+  function pressAction() { if (onAction) onAction(); }
+
+  // --- Clavier (desktop) ----------------------------------------------------
+  window.addEventListener('keydown', (e) => {
+    switch (e.key) {
+      case 'ArrowUp': case 'w': case 'W': case 'z': case 'Z':
+        setDirection('up'); setDevice(InputDevice.KEYBOARD); e.preventDefault(); break;
+      case 'ArrowDown': case 's': case 'S':
+        setDirection('down'); setDevice(InputDevice.KEYBOARD); e.preventDefault(); break;
+      case 'ArrowLeft': case 'a': case 'A': case 'q': case 'Q':
+        setDirection('left'); setDevice(InputDevice.KEYBOARD); e.preventDefault(); break;
+      case 'ArrowRight': case 'd': case 'D':
+        setDirection('right'); setDevice(InputDevice.KEYBOARD); e.preventDefault(); break;
+      case ' ': case 'Enter':
+        pressAction(); setDevice(InputDevice.KEYBOARD); e.preventDefault(); break;
+      case 'p': case 'P': case 'Escape':
+        // Pause dédiée (n'entre pas dans la rotation action/pause).
+        setDevice(InputDevice.KEYBOARD); e.preventDefault(); break;
+      default: break;
+    }
+  });
+
+  // --- Tactile (boutons du DOM, branchés par main.js) -----------------------
+  // main.js appelle bindTouchButton() -> on expose des handlers.
+  // Le tactile est marqué actif via setDevice(InputDevice.TOUCH).
+
+  // --- Gamepad (Gamepad API) ------------------------------------------------
+  // Détection de connexion/déconnexion.
+  window.addEventListener('gamepadconnected', (e) => {
+    if (gamepadIndex === null) {
+      gamepadIndex = e.gamepad.index;
+      setDevice(InputDevice.GAMEPAD);
+    }
+  });
+  window.addEventListener('gamepaddisconnected', (e) => {
+    if (e.gamepad.index === gamepadIndex) {
+      gamepadIndex = null;
+      // Retour au device par défaut (tactile ou clavier).
+      setDevice((window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+        ? InputDevice.TOUCH : InputDevice.KEYBOARD);
+    }
+  });
+
+  /** À appeler chaque frame pour interroger le gamepad. */
+  function pollGamepad() {
+    if (gamepadIndex === null) {
+      // Tentative de récupération (certains navigateurs ne lancent pas
+      // l'événement gamepadconnected si déjà pressé au chargement).
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (const p of pads) {
+        if (p) { gamepadIndex = p.index; setDevice(InputDevice.GAMEPAD); break; }
+      }
+    }
+    if (gamepadIndex === null) return;
+
+    const pad = navigator.getGamepads ? navigator.getGamepads()[gamepadIndex] : null;
+    if (!pad) return;
+
+    // Mapping standard (Standard Gamepad layout):
+    //   axes[0] / axes[1] : stick gauche X / Y
+    //   boutons 12/13/14/15 : croix directionnelle (haut/bas/gauche/droite)
+    //   bouton 0 (A) / 9 (Start) : action
+    const DEAD = 0.4;
+
+    // Stick analogique gauche
+    const ax = pad.axes[0] || 0;
+    const ay = pad.axes[1] || 0;
+    if (Math.abs(ax) > Math.abs(ay)) {
+      if (ax > DEAD) { setDirection('right'); setDevice(InputDevice.GAMEPAD); }
+      else if (ax < -DEAD) { setDirection('left'); setDevice(InputDevice.GAMEPAD); }
+    } else {
+      if (ay > DEAD) { setDirection('down'); setDevice(InputDevice.GAMEPAD); }
+      else if (ay < -DEAD) { setDirection('up'); setDevice(InputDevice.GAMEPAD); }
+    }
+
+    // Croix directionnelle (boutons 12..15)
+    const btns = pad.buttons;
+    if (btns[12] && btns[12].pressed) { setDirection('up'); setDevice(InputDevice.GAMEPAD); }
+    if (btns[13] && btns[13].pressed) { setDirection('down'); setDevice(InputDevice.GAMEPAD); }
+    if (btns[14] && btns[14].pressed) { setDirection('left'); setDevice(InputDevice.GAMEPAD); }
+    if (btns[15] && btns[15].pressed) { setDirection('right'); setDevice(InputDevice.GAMEPAD); }
+
+    // Action (A / Start) — front montant pour éviter la répétition.
+    const curA = btns[0] && btns[0].pressed;
+    const curStart = btns[9] && btns[9].pressed;
+    const prevA = prevButtons[0] || false;
+    const prevStart = prevButtons[9] || false;
+    if ((curA && !prevA) || (curStart && !prevStart)) {
+      pressAction();
+      setDevice(InputDevice.GAMEPAD);
+    }
+    prevButtons[0] = !!curA;
+    prevButtons[9] = !!curStart;
+  }
+
+  // --- Liaison des boutons tactiles du DOM ----------------------------------
+  function bindTouchButton(selector, handler) {
+    document.querySelectorAll(selector).forEach((btn) => {
+      const start = (e) => { e.preventDefault(); handler(btn); setDevice(InputDevice.TOUCH); btn.classList.add('pressed'); };
+      const end = (e) => { e.preventDefault(); btn.classList.remove('pressed'); };
+      btn.addEventListener('touchstart', start, { passive: false });
+      btn.addEventListener('touchend', end, { passive: false });
+      btn.addEventListener('touchcancel', end, { passive: false });
+      btn.addEventListener('mousedown', start);
+      btn.addEventListener('mouseup', end);
+      btn.addEventListener('mouseleave', end);
+    });
+  }
+
+  return {
+    get device() { return activeDevice; },
+    pollGamepad,
+    bindTouchButton,
+    setDevice,
+  };
+}
+
+
+/* ===========================================================================
+ * PacmanLike — musique chiptune générée procéduralement
+ *
+ * Génère une boucle musicale aléatoire respectant des règles d'harmonie
+ * simples, le tout via l'API Web Audio (oscillateurs carrés/triangle/sinusoïde)
+ * sans aucun fichier audio externe.
+ *
+ * Règles musicales appliquées:
+ *   - Gamme de La mineur naturel (aucune altération, sonorité "arcade"):
+ *       A B C D E F G  (indices 0..6 de la gamme).
+ *   - Progression d'accords en boucle sur 4 mesures (I - IV - V - I), chaque
+ *     mesure = un accord. Accords (degrés de la gamme, triades):
+ *       I  = Am  (A C E)
+ *       IV = F   (F A C)
+ *       V  = G   (G B D)   -> dominante; ramène au I.
+ *     Cette progression est consonnante et circulaire (le V résout sur le I).
+ *   - Basse: fondamentale de l'accord en notes longues (octave grave).
+ *   - Mélodie: tirée parmi les notes de l'accord courant (notes "concordantes"),
+ *     avec insertion occasionnelle d'une note de passage (ton voisin dans la
+ *     gamme) pour du mouvement. Le rythme est un motif arcade 16 pas/temps
+ *     avec des silences.
+ *   - Tempo ~140 BPM, signature 4/4, boucle de 4 mesures (~6,86 s).
+ *
+ * Le générateur choisit un grain aléatoire (seed) pour produire une boucle
+ * différente à chaque partie, tout en restant musicalement cohérent.
+ * ========================================================================== */
+
+// --- Théorie musicale (gamme de La mineur naturel) -------------------------
+// Fréquences en Hz pour 3 octaves. On indexe par demi-ton absolu depuis A2.
+const NOTE_A2 = 110; // La 2 = 110 Hz (référence grave)
+const SEMITONE = 2 ** (1 / 12); // rapport d'un demi-ton
+
+// Degrés de la gamme de La mineur naturel en demi-tons depuis la tonique (A).
+const SCALE_DEGREES = [0, 2, 3, 5, 7, 8, 10]; // A B C D E F G
+
+// Triades (en degrés de la gamme, 0-indexés) pour chaque accord de la progression.
+const CHORDS = {
+  I:  [0, 2, 4],   // A C E  (Am)
+  IV: [3, 5, 0],   // F A C  (F)  -> degré 3=F, 5=A, 0=C (octave sup.)
+  V:  [6, 1, 3],   // G B D  (G)  -> degré 6=G, 1=B, 3=D
+};
+const PROGRESSION = ['I', 'IV', 'V', 'I'];
+
+// Fréquence d'un degré de la gamme dans une octave donnée (A=degré 0).
+function degreeFreq(degreeInScale, octave) {
+  const semis = SCALE_DEGREES[((degreeInScale % 7) + 7) % 7];
+  const totalSemis = semis + 12 * octave;
+  return NOTE_A2 * Math.pow(SEMITONE, totalSemis);
+}
+
+// --- Générateur pseudo-aléatoire à graine (LCG) ----------------------------
+// Pour une boucle reproductible par grain mais différente par partie.
+function makeRng(seed) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+const randInt = (rng, min, max) => min + Math.floor(rng() * (max - min + 1));
+
+/** Génère la structure d'une boucle de 4 mesures (mélodie + basse). */
+function generateLoop(seed) {
+  const rng = makeRng(seed);
+  const STEPS = 16;                // pas par mesure (16èmes)
+  const melody = [];              // {step, measure, freq, dur}
+  const bass = [];                 // {measure, freq}
+
+  for (let m = 0; m < PROGRESSION.length; m++) {
+    const chord = CHORDS[PROGRESSION[m]];
+    // Basse: fondamentale (1er degré de l'accord), octave 0 (grave).
+    bass.push({ measure: m, freq: degreeFreq(chord[0], 0) });
+
+    // Mélodie: motif 16 pas, densité ~50%, notes d'accord + passages.
+    let lastDeg = chord[0];
+    for (let s = 0; s < STEPS; s++) {
+      // Avant-premier temps + autres temps: plus de chance de jouer.
+      const onBeat = (s % 4 === 0);
+      const playProb = onBeat ? 0.85 : 0.45;
+      if (rng() > playProb) continue;
+
+      // 80% une note d'accord (concordance), 20% une note de passage voisine.
+      let deg;
+      if (rng() < 0.8) {
+        // note d'accord, éventuellement à l'octave supérieure (mélodie aiguë)
+        const idx = chord[randInt(rng, 0, chord.length - 1)];
+        const oct = rng() < 0.6 ? 2 : 3;
+        deg = { s: idx, o: oct };
+      } else {
+        // note de passage: ton voisin dans la gamme (mouvement conjoint)
+        const dir = rng() < 0.5 ? -1 : 1;
+        const neighbor = (((lastDeg + dir) % 7) + 7) % 7;
+        deg = { s: neighbor, o: 2 };
+      }
+      lastDeg = deg.s;
+      const freq = degreeFreq(deg.s, deg.o);
+      // Durée: 1 pas le plus souvent, parfois 2 (note tenue sur couplet).
+      const dur = (rng() < 0.2) ? 2 : 1;
+      melody.push({ step: s, measure: m, freq, dur });
+    }
+  }
+  return { melody, bass, stepsPerMeasure: STEPS };
+}
+
+// --- Lecteur Web Audio ------------------------------------------------------
+/** Crée un lecteur de musique chiptune piloté par Web Audio. */
+function createMusic() {
+  let ctx = null;
+  let master = null;
+  let loop = null;
+  let timerId = null;
+  let playing = false;
+  let muted = false;
+  let volume = 0.18;
+
+  function ensureContext() {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : volume;
+      master.connect(ctx.destination);
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+  }
+
+  // Oscillateur chiptune avec enveloppe ADSR courte (type d'onde carré).
+  function blip(freq, start, dur, type = 'square', gainPeak = 0.5) {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    const a = start;            // attack
+    const d = start + 0.02;     // decay
+    const rel = start + dur;   // release
+    g.gain.setValueAtTime(0, a);
+    g.gain.linearRampToValueAtTime(gainPeak, a + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, d);
+    g.gain.setValueAtTime(0.0001, d);
+    g.gain.linearRampToValueAtTime(gainPeak * 0.7, rel - 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, rel);
+    osc.connect(g);
+    g.connect(master);
+    osc.start(a);
+    osc.stop(rel + 0.05);
+  }
+
+  function scheduleLoop(startTime) {
+    const BPM = 140;
+    const stepDur = 60 / BPM / 4;   // durée d'un 16ème
+    const measureDur = stepDur * loop.stepsPerMeasure;
+
+    // Basse: une note longue par mesure (triangle, plus doux).
+    for (const b of loop.bass) {
+      const t = startTime + b.measure * measureDur;
+      blip(b.freq, t, measureDur * 0.95, 'triangle', 0.6);
+    }
+
+    // Mélodie: notes courtes (carré, perçant, typique chiptune).
+    for (const n of loop.melody) {
+      const t = startTime + n.measure * measureDur + n.step * stepDur;
+      blip(n.freq, t, n.dur * stepDur * 0.9, 'square', 0.4);
+    }
+
+    // Battement (hi-hat) léger sur chaque temps avec un court bruit — on
+    // simule avec un osc aigu très court atténué pour rester simple.
+    for (let m = 0; m < PROGRESSION.length; m++) {
+      for (let beat = 0; beat < 4; beat++) {
+        const t = startTime + m * measureDur + beat * (stepDur * 4);
+        blip(1200, t, 0.02, 'square', 0.05);
+      }
+    }
+
+    return startTime + PROGRESSION.length * measureDur;
+  }
+
+  function tick() {
+    if (!playing) return;
+    const now = ctx.currentTime;
+    // Anticipe la prochaine boucle 0.1 s avant la fin de la courante.
+    const loopEnd = scheduleLoop(loopStart);
+    loopStart = loopEnd;
+    timerId = setTimeout(tick, Math.max(0, (loopEnd - now - 0.1) * 1000));
+  }
+
+  let loopStart = 0;
+
+  function start(seed) {
+    ensureContext();
+    if (playing) return;
+    loop = generateLoop(seed ?? (Math.random() * 1e9) | 0);
+    playing = true;
+    loopStart = ctx.currentTime + 0.1;
+    tick();
+  }
+
+  function stop() {
+    playing = false;
+    if (timerId) { clearTimeout(timerId); timerId = null; }
+  }
+
+  function setMuted(m) {
+    muted = m;
+    if (master) master.gain.value = m ? 0 : volume;
+  }
+  function isMuted() { return muted; }
+  function setVolume(v) {
+    volume = Math.max(0, Math.min(1, v));
+    if (master) master.gain.value = muted ? 0 : volume;
+  }
+  function getVolume() { return volume; }
+
+  return { start, stop, setMuted, isMuted, setVolume, getVolume, get playing() { return playing; } };
+}
+
+
+/* ===========================================================================
+ * PacmanLike — point d'entrée
+ * Squelette de jeu : canvas pixel art, boucle à pas fixe, joueur déplaçable,
+ * entrées clavier + contrôles tactiles transparents (réactifs au média).
+ *
+ * Note : la logique de jeu complète (fantômes, pastilles, niveaux) est
+ * volontairement minimale ici ; l'objet de cette livraison est le squelette
+ * jouable et la compatibilité mobile avec contrôles tactiles.
+ * ========================================================================== */
+
+
+
+const CELL = 8;                 // taille d'une cellule en px (résolution logique)
+const COLS = 28;                // 224 / 8
+const ROWS = 31;                // 248 / 8
+const SPEED = 32;               // cellules par seconde (joueur)
+const STEP = 1 / 60;            // pas de simulation fixe (s)
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// --- Rendu CRT (post-traitement WebGL) ----------------------------------
+// Le canvas 2D sert de source; le canvas WebGL créé par le renderer devient
+// l'affichage visible. On masque le canvas 2D source.
+const crt = createCRTRenderer(canvas);
+canvas.classList.add('source-canvas');
+
+// --- Musique chiptune générée procéduralement (Web Audio) ------------------
+const music = createMusic();
+
+// --- Boîte de dialogue de paramètres (volume + mute musique) ----------------
+const settingsBtn = document.getElementById('settings-btn');
+const settingsDialog = document.getElementById('settings-dialog');
+const volumeRange = document.getElementById('volume');
+const volumeValue = document.getElementById('volume-value');
+const muteMusicCheck = document.getElementById('mute-music');
+
+// Persistance des réglages audio dans localStorage.
+const SETTINGS_KEY = 'pacmanlike.audio';
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return { volume: s.volume != null ? s.volume : 0.18, muted: !!s.muted };
+  } catch { return { volume: 0.18, muted: false }; }
+}
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    volume: music.getVolume(),
+    muted: music.isMuted(),
+  }));
+}
+
+// Applique un état à la fois au moteur audio et à l'UI.
+function applyVolume(v01) {
+  music.setVolume(v01);
+  volumeRange.value = Math.round(v01 * 100);
+  volumeValue.textContent = `${Math.round(v01 * 100)}%`;
+}
+function applyMuted(m) {
+  music.setMuted(m);
+  muteMusicCheck.checked = m;
+}
+function syncSettingsUI() {
+  applyVolume(music.getVolume());
+  applyMuted(music.isMuted());
+}
+
+// Init depuis le stockage (avant tout démarrage audio).
+const saved = loadSettings();
+applyVolume(saved.volume);
+applyMuted(saved.muted);
+
+// Ouverture / fermeture de la boîte de dialogue.
+settingsBtn.addEventListener('click', () => {
+  syncSettingsUI();
+  settingsDialog.showModal();
+});
+// Le bouton "Fermer" (type=submit value=close) ferme via method="dialog".
+settingsDialog.addEventListener('close', saveSettings);
+
+// Slider de volume: applique en direct + sauvegarde.
+volumeRange.addEventListener('input', () => {
+  applyVolume(Number(volumeRange.value) / 100);
+  saveSettings();
+});
+// Checkbox mute: applique en direct + sauvegarde.
+muteMusicCheck.addEventListener('change', () => {
+  applyMuted(muteMusicCheck.checked);
+  saveSettings();
+});
+
+// Raccourci clavier M: bascule le mute sans ouvrir la boîte.
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') { applyMuted(!music.isMuted()); saveSettings(); e.preventDefault(); }
+});
+muteBtn.addEventListener('click', toggleMute);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') { toggleMute(); e.preventDefault(); }
+});
+syncMuteUI();
+
+// --- Labyrinthe simplifié (1 = mur, 0 = vide) -------------------------------
+// Grille 28x31 générée par bordure + quelques murs internes pour la démo.
+const maze = (() => {
+  const m = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+  for (let x = 0; x < COLS; x++) { m[0][x] = 1; m[ROWS - 1][x] = 1; }
+  for (let y = 0; y < ROWS; y++) { m[y][0] = 1; m[y][COLS - 1] = 1; }
+  // quelques blocs internes
+  for (const [x, y, w, h] of [[4, 4, 6, 3], [18, 4, 6, 3], [4, 22, 6, 3], [18, 22, 6, 3]]) {
+    for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) m[y + j][x + i] = 1;
+  }
+  return m;
+})();
+
+function isWall(col, row) {
+  // Tunnels latéraux : les colonnes hors-grille sont traversables.
+  if (row < 0 || row >= ROWS) return true;
+  if (col < 0 || col >= COLS) return false;
+  return maze[row][col] === 1;
+}
+
+// --- Entité joueur ----------------------------------------------------------
+const player = {
+  x: Math.floor(COLS / 2) + 0.5,   // position en cellules (centre)
+  y: Math.floor(ROWS / 2) + 0.5,
+  dir: { x: 0, y: 0 },
+  nextDir: { x: 0, y: 0 },
+};
+
+const DIRECTIONS = {
+  up:    { x: 0, y: -1 },
+  down:  { x: 0, y: 1 },
+  left:  { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+};
+
+// --- Entrées unifiées : clavier + tactile + gamepad -----------------------
+const input = createInput({
+  onDirection: (name) => { const d = DIRECTIONS[name]; if (d) player.nextDir = d; },
+  onAction: toggleAction,
+  onDeviceChange: (device) => updateTutorial(device),
+});
+
+// Branchement des boutons tactiles du DOM (D-pad + action).
+input.bindTouchButton('.dpad-btn', (btn) => input.setDirection(btn.dataset.dir));
+input.bindTouchButton('#touch-action', () => input.pressAction());
+
+// --- Tutoriel de démarrage (adapté au device d'entrée) --------------------
+const tutorialList = document.getElementById('tutorial-list');
+
+// Cartouches de touche (clavier) / bouton (manette) / geste (tactile).
+const k = (label) => `<span class="key">${label}</span>`;
+
+const TUTORIALS = {
+  [InputDevice.KEYBOARD]: [
+    `Déplacement : ${k('↑')} ${k('↓')} ${k('←')} ${k('→')} <span class="lbl">ou</span> ${k('Z')} ${k('Q')} ${k('S')} ${k('D')}`,
+    `Démarrer / Pause : ${k('Espace')} <span class="lbl">ou</span> ${k('Entrée')}`,
+    `Pause : ${k('P')} <span class="lbl">ou</span> ${k('Échap')}`,
+  ],
+  [InputDevice.GAMEPAD]: [
+    `Déplacement : croix directionnelle <span class="lbl">ou</span> stick gauche`,
+    `Démarrer / Pause : bouton ${k('A')} <span class="lbl">ou</span> ${k('Start')}`,
+    `Connecte/déconnecte la manette : détection automatique.`,
+  ],
+  [InputDevice.TOUCH]: [
+    `Déplacement : croix directionnelle tactile en bas à gauche`,
+    `Démarrer / Pause : bouton ${k('⏯')} en bas à droite`,
+  ],
+};
+
+function updateTutorial(device) {
+  const lines = TUTORIALS[device] || TUTORIALS[InputDevice.KEYBOARD];
+  tutorialList.innerHTML = lines.map((l) => `<li>${l}</li>`).join('');
+}
+updateTutorial(input.device);
+
+// --- État de jeu simplifié --------------------------------------------------
+const STATE = { TITLE: 'title', PLAYING: 'playing', PAUSED: 'paused', GAMEOVER: 'gameover' };
+let state = STATE.TITLE;
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlay-title');
+const overlayMsg = document.getElementById('overlay-message');
+const scoreEl = document.getElementById('score');
+const livesEl = document.getElementById('lives');
+const levelEl = document.getElementById('level');
+
+let score = 0;
+let lives = 3;
+let level = 1;
+
+function showOverlay(title, msg) {
+  overlayTitle.textContent = title;
+  overlayMsg.textContent = msg;
+  overlay.classList.add('visible');
+}
+function hideOverlay() { overlay.classList.remove('visible'); }
+
+function toggleAction() {
+  if (state === STATE.TITLE || state === STATE.GAMEOVER) {
+    startGame();
+  } else if (state === STATE.PLAYING) {
+    togglePause();
+  }
+}
+
+function togglePause() {
+  if (state === STATE.PLAYING) {
+    state = STATE.PAUSED;
+    showOverlay('Pause', 'Appuie pour reprendre');
+    music.setMuted(true);
+  } else if (state === STATE.PAUSED) {
+    state = STATE.PLAYING;
+    hideOverlay();
+    music.setMuted(false);
+  }
+}
+
+function startGame() {
+  score = 0; lives = 3; level = 1;
+  player.x = Math.floor(COLS / 2) + 0.5;
+  player.y = Math.floor(ROWS / 2) + 0.5;
+  player.dir = { x: 0, y: 0 };
+  player.nextDir = { x: 0, y: 0 };
+  updateHud();
+  state = STATE.PLAYING;
+  hideOverlay();
+  // Démarre la musique au premier démarrage (geste utilisateur requis par
+  // la politique d'autoplay des navigateurs). Boucle différente à chaque partie.
+  if (!music.playing) music.start();
+  music.setMuted(false);
+}
+
+function updateHud() {
+  scoreEl.textContent = score;
+  livesEl.textContent = lives;
+  levelEl.textContent = level;
+}
+
+// --- Simulation -------------------------------------------------------------
+function canMoveTo(col, row) {
+  return !isWall(Math.floor(col), Math.floor(row));
+}
+
+function update(dt) {
+  if (state !== STATE.PLAYING) return;
+
+  // Tente d'appliquer la direction voulue à l'intersection / alignement.
+  const col = Math.floor(player.x);
+  const row = Math.floor(player.y);
+  const cx = col + 0.5;
+  const cy = row + 0.5;
+  const alignedX = Math.abs(player.x - cx) < 0.1;
+  const alignedY = Math.abs(player.y - cy) < 0.1;
+
+  if ((player.nextDir.x !== player.dir.x || player.nextDir.y !== player.dir.y) && (alignedX || alignedY)) {
+    const nc = col + player.nextDir.x;
+    const nr = row + player.nextDir.y;
+    if (!isWall(nc, nr)) {
+      player.dir = player.nextDir;
+      // recentre sur l'axe perpendiculaire pour éviter de longer un mur.
+      if (player.dir.x !== 0) player.y = cy;
+      if (player.dir.y !== 0) player.x = cx;
+    }
+  }
+
+  // Déplacement continu
+  const nx = player.x + player.dir.x * SPEED * dt;
+  const ny = player.y + player.dir.y * SPEED * dt;
+
+  // Collisions simples (avant/arrière de la cellule selon l'axe de mouvement)
+  if (player.dir.x !== 0) {
+    const probeX = nx + player.dir.x * 0.4;
+    if (!isWall(Math.floor(probeX), row)) player.x = nx;
+    else player.x = cx;
+  }
+  if (player.dir.y !== 0) {
+    const probeY = ny + player.dir.y * 0.4;
+    if (!isWall(col, Math.floor(probeY))) player.y = ny;
+    else player.y = cy;
+  }
+
+  // Tunnels latéraux
+  if (player.x < -0.5) player.x = COLS - 0.5;
+  else if (player.x > COLS - 0.5) player.x = -0.5;
+}
+
+// --- Rendu ------------------------------------------------------------------
+function render() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Murs
+  ctx.fillStyle = '#2121ff';
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (maze[y][x] === 1) ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+    }
+  }
+
+  // Joueur (cercle jaune pixel)
+  ctx.fillStyle = '#ffff00';
+  const px = Math.round(player.x * CELL);
+  const py = Math.round(player.y * CELL);
+  ctx.beginPath();
+  ctx.arc(px, py, CELL * 0.45, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// --- Boucle principale à pas fixe ------------------------------------------
+let last = performance.now();
+let acc = 0;
+function loop(now) {
+  input.pollGamepad();
+  let dt = (now - last) / 1000;
+  last = now;
+  if (dt > 0.25) dt = 0.25; // borne anti-saut après tab inactive
+  acc += dt;
+  while (acc >= STEP) {
+    update(STEP);
+    acc -= STEP;
+  }
+  render();
+  if (crt.enabled) crt.render(last / 1000);
+  requestAnimationFrame(loop);
+}
+
+// Écran de titre initial
+showOverlay('PacmanLike', input.device === InputDevice.GAMEPAD ? 'Appuie sur A / Start pour jouer' : (input.device === InputDevice.TOUCH ? 'Appuie sur ⏯ pour jouer' : 'Appuie sur Espace pour jouer'));
+requestAnimationFrame(loop);
+
+  </script>
+</body>
+</html>
