@@ -129,9 +129,10 @@ Justification :
 
 ### 3.1 Pixel art
 
-- Résolution logique basse (ex. 224×248 px internes équivalents au cadre de jeu), affichée agrandie avec **`image-rendering: pixelated`** pour conserver des bords nets.
-- Sprites à la résolution native (ex. 16×16 px par personnage), sans interpolation de lissage.
+- Résolution logique basse du canvas de jeu : **224×248 px** (28×31 cellules de 8 px).
+- Sprites à la résolution native (ex. 16×16 px par personnage), dessinés sans interpolation de lissage.
 - Palette de couleurs limitée et cohérente (fonds noirs, murs bleus, pastilles jaunes) pour un rendu authentique « arcade ».
+- Le canvas 2D de jeu est **masqué** (`display: none` via la classe `source-canvas`) : il sert uniquement de **source de texture** pour le rendu WebGL (cf. 3.1.bis). L'affichage visible est le canvas WebGL `#crt`.
 
 Justification : le pixel art est peu coûteux à produire, cohérent avec l'esthétique rétro demandée, et performant à l'affichage.
 
@@ -188,6 +189,19 @@ Effets sonores simples (manger une pastille, manger un fantôme, perdre une vie)
 
 Une architecture en **modules séparés par responsabilité**, communiquant par des appels directs de méthodes (pas d'event bus global dans la V1 pour rester simple), avec une séparation nette entre **modèle** (état/logique), **vue** (rendu) et **contrôleur** (entrées + orchestration).
 
+Structure **actuelle** (squelette jouable, fichiers à la racine) :
+
+```
+├── index.html            // Structure DOM: canvas 2D (#game), canvas WebGL (#crt), HUD, overlay, contrôles tactiles
+├── styles.css           // Mise en page, pixel art, contrôles tactiles transparents, media queries mobiles
+├── main.js              // Point d'entrée: boucle à pas fixe, joueur déplaçable, entrées clavier + tactiles, overlay/états
+├── crt.js               // Renderer WebGL1: quad plein écran, texture depuis #game, gestion des glitches de balayage
+└── shaders/
+    └── crt.glsl.js       // Vertex + fragment shaders CRT (GLSL exporté en chaînes JS)
+```
+
+Structure **cible** (refactor \`src/\` décrit ci-dessous, non encore appliquée) :
+
 ```
 src/
 ├── main.js              // Point d'entrée: bootstrap, branche la game loop
@@ -196,7 +210,7 @@ src/
 │   ├── GameState.js     // Énumération des états (TITLE, PLAYING, ...)
 │   ├── Timer.js         // accumulateur à pas fixe
 │   └── input/
-│       └── Input.js     // Capture clavier, expose l'état des touches
+│       └── Input.js     // Capture clavier + tactile, expose l'état des touches
 ├── world/
 │   ├── Maze.js          // Grille, parsing du niveau, requêtes (mur? dot? tunnel?)
 │   ├── Cell.js          // Types de cellules
@@ -211,7 +225,9 @@ src/
 │   ├── AISystem.js          // Décisions de direction des fantômes aux intersections
 │   └── ScoreSystem.js       // Score, vies, multiplicateurs de combo
 ├── render/
-│   ├── Renderer.js      // Boucle de rendu, interpolation
+│   ├── Renderer.js      // Rendu du jeu sur canvas 2D (source), interpolation
+│   ├── CRTRenderer.js   // Renderer WebGL1 + shaders CRT (équivalent de crt.js)
+│   ├── shaders/         // Shaders GLSL (équivalent de shaders/crt.glsl.js)
 │   ├── SpriteFactory.js // Génération/cache de sprites procéduraux
 │   └── HUD.js           // Score, vies, niveau affichés à l'écran
 └── audio/
@@ -247,9 +263,10 @@ Utilisation des modules ECMAScript standard, servis via un simple serveur statiq
 2. `Game` entre en état `TITLE`.
 3. Sur `Espace`, passage à `PLAYING` : la boucle commence à appeler `update(STEP)` puis `render()`.
 4. `update` : `Input` fixe la direction voulue du joueur ; `Player` applique le mouvement ; `AISystem` décide les directions des fantômes ; `CollisionSystem` détecte les collisions (pastilles, fantômes) ; `ScoreSystem` met à jour le score.
-5. `render` : `Renderer` dessine le labyrinthe, les entités et le `HUD`.
-6. À la fin du niveau (plus de pastilles) → incrémentation du niveau, reparse avec paramètres de difficulté accrus.
-7. À la perte de la dernière vie → `GAME_OVER` → `TITLE` (rejouer).
+5. `render` : `Renderer` dessine le labyrinthe, les entités et le `HUD` sur le canvas 2D source (`#game`, masqué).
+6. `crt.render(t)` : le renderer WebGL1 échantillonne le canvas 2D comme texture et applique le shader CRT (scanlines, courbure, aberration chromatique, glitches de balayage) sur le canvas d'affichage `#crt`. Si WebGL est indisponible, le canvas 2D source est affiché directement (fallback sans effet).
+7. À la fin du niveau (plus de pastilles) → incrémentation du niveau, reparse avec paramètres de difficulté accrus.
+8. À la perte de la dernière vie → `GAME_OVER` → `TITLE` (rejouer).
 
 ---
 
@@ -330,7 +347,10 @@ Exemple (extrait, non à l'échelle) :
 - [ ] Le mode *frightened* rend les fantômes vulnérables et mangeables.
 - [ ] La fin du niveau (toutes pastilles mangées) enchaîne vers le niveau suivant.
 - [ ] La perte de toutes les vies mène à l'écran `GAME_OVER`.
-- [ ] Le rendu est en pixel art net (pas de lissage).
+- [ ] Le rendu est en pixel art net (pas de lissage) sur le canvas 2D source.
+- [ ] Le rendu final passe par WebGL avec le shader CRT (scanlines, courbure, vignettage, aberration chromatique, scintillement).
+- [ ] Des glitches de balayage apparaissent sporadiquement (bande horizontale décalée).
+- [ ] En l'absence de WebGL, le canvas 2D source s'affiche en fallback sans effet CRT.
 - [ ] Sur smartphone (paysage ou portrait), un D-pad et un bouton d'action transparents s'affichent et sont utilisables.
 - [ ] Sur desktop, les contrôles tactiles sont masqués et le clavier suffit à jouer.
 - [ ] Aucune dépendance externe n'est requise.
