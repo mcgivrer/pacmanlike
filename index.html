@@ -17,11 +17,19 @@
 
     <canvas id="game" width="224" height="248"></canvas>
 
-    <!-- Écran d'overlay (titre / pause / game over) -->
+    <!-- Écran d'overlay (titre / pause / game over + tutoriel de démarrage) -->
     <div id="overlay" class="overlay visible">
       <div class="overlay-card">
         <h1 id="overlay-title">PacmanLike</h1>
-        <p id="overlay-message">Appuie sur Espace pour jouer</p>
+        <p id="overlay-message">Appuie pour jouer</p>
+
+        <!-- Tutoriel de contrôles (adapté au device d'entrée détecté) -->
+        <div id="tutorial" class="tutorial">
+          <h2 class="tutorial-title">Comment jouer</h2>
+          <ul id="tutorial-list" class="tutorial-list">
+            <!-- Contenu généré dynamiquement selon le device (clavier/manette/tactile) -->
+          </ul>
+        </div>
       </div>
     </div>
 

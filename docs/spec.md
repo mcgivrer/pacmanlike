@@ -105,6 +105,10 @@ Justification : ces comportements sont les patterns historiques éprouvés ; ils
 | Desktop | Démarrer / Rejouer | `Espace` / `Entrée` |
 | Smartphone | Déplacement | D-pad tactile transparent (croix directionnelle) |
 | Smartphone | Démarrer / Pause | Bouton tactile d'action (`⏯`) |
+| Manette (gamepad) | Déplacement | Croix directionnelle ou stick gauche |
+| Manette (gamepad) | Démarrer / Pause | Bouton `A` ou `Start` |
+
+Le support gamepad repose sur la **Gamepad API** du navigateur (`gamepadconnected`/`gamepaddisconnected` + interrogation `navigator.getGamepads()` à chaque frame). Le mapping suit le *Standard Gamepad layout*. La manette est détectée à la connexion (et à la première pression si l'événement de connexion a été manqué), et le retour au clavier/tactile se fait à la déconnexion.
 
 #### 2.6.1 Contrôles tactiles transparents (mobile)
 
@@ -122,6 +126,21 @@ Justification :
 - La transparence préserve la lisibilité du jeu tout en restant utilisable.
 - `touch-action: none` et `overscroll-behavior: none` empêchent les gestes parasites (scroll, zoom) pendant le jeu.
 - Les boutons utilisent `touchstart`/`touchend` (avec fallback souris) pour une réactivité immédiate, sans délai de clic mobile.
+
+#### 2.6.2 Tutoriel de démarrage adaptatif
+
+Au démarrage, un **mini-tutoriel** s'affiche sur l'écran de titre et liste les touches/boutons nécessaires pour jouer. Son contenu **s'adapte au device d'entrée actif** :
+
+- **Clavier** : flèches/ZQSD, `Espace`/`Entrée`, `P`/`Échap`.
+- **Manette** : croix directionnelle ou stick gauche, bouton `A`/`Start`.
+- **Tactile** : D-pad et bouton d'action à l'écran.
+
+Le device actif est déterminé par la dernière source d'entrée utilisée, avec une valeur par défaut (tactile si `pointer: coarse`, sinon clavier). À chaque changement de device (ex. connexion d'une manette en cours de partie), le tutoriel et le message de l'écran de titre se mettent à jour dynamiquement via un callback `onDeviceChange`.
+
+Justification :
+
+- Un joueur découvrant le jeu ne doit pas deviner les contrôles ; le tutoriel les expose dans sa langue, formatées en cartouches de touche lisibles.
+- L'adaptation au device évite d'afficher des touches de clavier à un joueur à la manette (ou inversement), ce qui serait source de confusion.
 
 ---
 
@@ -194,7 +213,8 @@ Structure **actuelle** (squelette jouable, fichiers à la racine) :
 ```
 ├── index.html            // Structure DOM: canvas 2D (#game), canvas WebGL (#crt), HUD, overlay, contrôles tactiles
 ├── styles.css           // Mise en page, pixel art, contrôles tactiles transparents, media queries mobiles
-├── main.js              // Point d'entrée: boucle à pas fixe, joueur déplaçable, entrées clavier + tactiles, overlay/états
+├── main.js              // Point d'entrée: boucle à pas fixe, joueur déplaçable, overlay/états, tutoriel adaptatif
+├── input.js             // Entrées unifiées: clavier + tactile + gamepad (Gamepad API), détection du device actif
 ├── crt.js               // Renderer WebGL1: quad plein écran, texture depuis #game, gestion des glitches de balayage
 └── shaders/
     └── crt.glsl.js       // Vertex + fragment shaders CRT (GLSL exporté en chaînes JS)
@@ -353,4 +373,6 @@ Exemple (extrait, non à l'échelle) :
 - [ ] En l'absence de WebGL, le canvas 2D source s'affiche en fallback sans effet CRT.
 - [ ] Sur smartphone (paysage ou portrait), un D-pad et un bouton d'action transparents s'affichent et sont utilisables.
 - [ ] Sur desktop, les contrôles tactiles sont masqués et le clavier suffit à jouer.
+- [ ] Une manette (Gamepad API) connectée permet de jouer (croix/stick + bouton A/Start), avec détection auto à la connexion/déconnexion.
+- [ ] Un tutoriel de démarrage affiche les contrôles adaptés au device actif (clavier / manette / tactile) et se met à jour au changement de device.
 - [ ] Aucune dépendance externe n'est requise.

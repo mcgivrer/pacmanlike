@@ -9,6 +9,7 @@
  * ========================================================================== */
 
 import { createCRTRenderer } from './crt.js';
+import { createInput, InputDevice } from './input.js';
 
 const CELL = 8;                 // taille d'une cellule en px (résolution logique)
 const COLS = 28;                // 224 / 8
@@ -61,45 +62,45 @@ const DIRECTIONS = {
   right: { x: 1, y: 0 },
 };
 
-// --- Entrées : clavier + tactiles ------------------------------------------
-const input = {
-  setDirection(name) {
-    const d = DIRECTIONS[name];
-    if (d) player.nextDir = d;
-  },
-};
-
-// Clavier (desktop)
-window.addEventListener('keydown', (e) => {
-  switch (e.key) {
-    case 'ArrowUp': case 'w': case 'W': case 'z': case 'Z': input.setDirection('up'); e.preventDefault(); break;
-    case 'ArrowDown': case 's': case 'S': input.setDirection('down'); e.preventDefault(); break;
-    case 'ArrowLeft': case 'a': case 'A': case 'q': case 'Q': input.setDirection('left'); e.preventDefault(); break;
-    case 'ArrowRight': case 'd': case 'D': input.setDirection('right'); e.preventDefault(); break;
-    case ' ': case 'Enter': toggleAction(); e.preventDefault(); break;
-    case 'p': case 'P': case 'Escape': togglePause(); e.preventDefault(); break;
-    default: break;
-  }
+// --- Entrées unifiées : clavier + tactile + gamepad -----------------------
+const input = createInput({
+  onDirection: (name) => { const d = DIRECTIONS[name]; if (d) player.nextDir = d; },
+  onAction: toggleAction,
+  onDeviceChange: (device) => updateTutorial(device),
 });
 
-// Tactiles : les boutons du D-pad / action (ne font rien si l'élément est
-// masqué en CSS, mais les listeners restent inoffensifs).
-function bindTouchButton(selector, onDown) {
-  document.querySelectorAll(selector).forEach((btn) => {
-    const start = (e) => { e.preventDefault(); onDown(btn); btn.classList.add('pressed'); };
-    const end = (e) => { e.preventDefault(); btn.classList.remove('pressed'); };
-    btn.addEventListener('touchstart', start, { passive: false });
-    btn.addEventListener('touchend', end, { passive: false });
-    btn.addEventListener('touchcancel', end, { passive: false });
-    // Souris aussi (utile en test desktop avec les devtools mobiles).
-    btn.addEventListener('mousedown', start);
-    btn.addEventListener('mouseup', end);
-    btn.addEventListener('mouseleave', end);
-  });
-}
+// Branchement des boutons tactiles du DOM (D-pad + action).
+input.bindTouchButton('.dpad-btn', (btn) => input.setDirection(btn.dataset.dir));
+input.bindTouchButton('#touch-action', () => input.pressAction());
 
-bindTouchButton('.dpad-btn', (btn) => input.setDirection(btn.dataset.dir));
-bindTouchButton('#touch-action', () => toggleAction());
+// --- Tutoriel de démarrage (adapté au device d'entrée) --------------------
+const tutorialList = document.getElementById('tutorial-list');
+
+// Cartouches de touche (clavier) / bouton (manette) / geste (tactile).
+const k = (label) => `<span class="key">${label}</span>`;
+
+const TUTORIALS = {
+  [InputDevice.KEYBOARD]: [
+    `Déplacement : ${k('↑')} ${k('↓')} ${k('←')} ${k('→')} <span class="lbl">ou</span> ${k('Z')} ${k('Q')} ${k('S')} ${k('D')}`,
+    `Démarrer / Pause : ${k('Espace')} <span class="lbl">ou</span> ${k('Entrée')}`,
+    `Pause : ${k('P')} <span class="lbl">ou</span> ${k('Échap')}`,
+  ],
+  [InputDevice.GAMEPAD]: [
+    `Déplacement : croix directionnelle <span class="lbl">ou</span> stick gauche`,
+    `Démarrer / Pause : bouton ${k('A')} <span class="lbl">ou</span> ${k('Start')}`,
+    `Connecte/déconnecte la manette : détection automatique.`,
+  ],
+  [InputDevice.TOUCH]: [
+    `Déplacement : croix directionnelle tactile en bas à gauche`,
+    `Démarrer / Pause : bouton ${k('⏯')} en bas à droite`,
+  ],
+};
+
+function updateTutorial(device) {
+  const lines = TUTORIALS[device] || TUTORIALS[InputDevice.KEYBOARD];
+  tutorialList.innerHTML = lines.map((l) => `<li>${l}</li>`).join('');
+}
+updateTutorial(input.device);
 
 // --- État de jeu simplifié --------------------------------------------------
 const STATE = { TITLE: 'title', PLAYING: 'playing', PAUSED: 'paused', GAMEOVER: 'gameover' };
@@ -231,6 +232,7 @@ function render() {
 let last = performance.now();
 let acc = 0;
 function loop(now) {
+  input.pollGamepad();
   let dt = (now - last) / 1000;
   last = now;
   if (dt > 0.25) dt = 0.25; // borne anti-saut après tab inactive
@@ -245,5 +247,5 @@ function loop(now) {
 }
 
 // Écran de titre initial
-showOverlay('PacmanLike', 'Espace ou ▶ pour jouer');
+showOverlay('PacmanLike', input.device === InputDevice.GAMEPAD ? 'Appuie sur A / Start pour jouer' : (input.device === InputDevice.TOUCH ? 'Appuie sur ⏯ pour jouer' : 'Appuie sur Espace pour jouer'));
 requestAnimationFrame(loop);
