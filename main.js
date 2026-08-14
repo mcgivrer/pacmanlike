@@ -177,6 +177,15 @@ function updateTutorial(device) {
 }
 updateTutorial(input.device);
 
+// Démarrage au clic sur le bouton "Jouer" ou sur l'overlay (n'importe où sur l'écran de titre).
+const playBtn = document.getElementById('play-btn');
+playBtn.addEventListener('click', () => input.pressAction());
+overlay.addEventListener('click', (e) => {
+  // Ne pas démarrer si on clique sur le bouton paramètres ou un autre contrôle.
+  if (e.target.closest('.settings-dialog') || e.target.id === 'settings-btn') return;
+  input.pressAction();
+});
+
 // --- État de jeu simplifié --------------------------------------------------
 const STATE = { TITLE: 'title', PLAYING: 'playing', PAUSED: 'paused', GAMEOVER: 'gameover' };
 let state = STATE.TITLE;

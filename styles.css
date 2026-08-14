@@ -158,6 +158,24 @@ html, body {
 }
 .tutorial-list .lbl { opacity: 0.65; }
 
+/* Bouton "Jouer" dans l'overlay (visible sur tous les devices) */
+.play-btn {
+  display: block;
+  margin: 1.2rem auto 0;
+  padding: 8px 28px;
+  background: rgba(255, 255, 0, 0.12);
+  border: 1px solid rgba(255, 255, 0, 0.7);
+  border-radius: 8px;
+  color: #ffff00;
+  font-family: inherit;
+  font-size: 16px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.play-btn:active { background: rgba(255, 255, 0, 0.28); transform: scale(0.97); }
+
 /* ===========================================================================
    Contrôles tactiles — transparents par défaut, affichés uniquement
    lorsque le média correspond à un smartphone (paysage OU portrait).
