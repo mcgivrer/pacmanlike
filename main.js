@@ -8,6 +8,10 @@
  * jouable et la compatibilité mobile avec contrôles tactiles.
  * ========================================================================== */
 
+import { createCRTRenderer } from './crt.js';
+import { createInput, InputDevice } from './input.js';
+import { createMusic } from './music.js';
+
 const CELL = 8;                 // taille d'une cellule en px (résolution logique)
 const COLS = 28;                // 224 / 8
 const ROWS = 31;                // 248 / 8
@@ -17,6 +21,86 @@ const STEP = 1 / 60;            // pas de simulation fixe (s)
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
+
+// --- Rendu CRT (post-traitement WebGL) ----------------------------------
+// Le canvas 2D sert de source; le canvas WebGL créé par le renderer devient
+// l'affichage visible. On masque le canvas 2D source.
+const crt = createCRTRenderer(canvas);
+canvas.classList.add('source-canvas');
+
+// --- Musique chiptune générée procéduralement (Web Audio) ------------------
+const music = createMusic();
+
+// --- Boîte de dialogue de paramètres (volume + mute musique) ----------------
+const settingsBtn = document.getElementById('settings-btn');
+const settingsDialog = document.getElementById('settings-dialog');
+const volumeRange = document.getElementById('volume');
+const volumeValue = document.getElementById('volume-value');
+const muteMusicCheck = document.getElementById('mute-music');
+
+// Persistance des réglages audio dans localStorage.
+const SETTINGS_KEY = 'pacmanlike.audio';
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return { volume: s.volume != null ? s.volume : 0.18, muted: !!s.muted };
+  } catch { return { volume: 0.18, muted: false }; }
+}
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    volume: music.getVolume(),
+    muted: music.isMuted(),
+  }));
+}
+
+// Applique un état à la fois au moteur audio et à l'UI.
+function applyVolume(v01) {
+  music.setVolume(v01);
+  volumeRange.value = Math.round(v01 * 100);
+  volumeValue.textContent = `${Math.round(v01 * 100)}%`;
+}
+function applyMuted(m) {
+  music.setMuted(m);
+  muteMusicCheck.checked = m;
+}
+function syncSettingsUI() {
+  applyVolume(music.getVolume());
+  applyMuted(music.isMuted());
+}
+
+// Init depuis le stockage (avant tout démarrage audio).
+const saved = loadSettings();
+applyVolume(saved.volume);
+applyMuted(saved.muted);
+
+// Ouverture / fermeture de la boîte de dialogue.
+settingsBtn.addEventListener('click', () => {
+  syncSettingsUI();
+  settingsDialog.showModal();
+});
+// Le bouton "Fermer" (type=submit value=close) ferme via method="dialog".
+settingsDialog.addEventListener('close', saveSettings);
+
+// Slider de volume: applique en direct + sauvegarde.
+volumeRange.addEventListener('input', () => {
+  applyVolume(Number(volumeRange.value) / 100);
+  saveSettings();
+});
+// Checkbox mute: applique en direct + sauvegarde.
+muteMusicCheck.addEventListener('change', () => {
+  applyMuted(muteMusicCheck.checked);
+  saveSettings();
+});
+
+// Raccourci clavier M: bascule le mute sans ouvrir la boîte.
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') { applyMuted(!music.isMuted()); saveSettings(); e.preventDefault(); }
+});
+muteBtn.addEventListener('click', toggleMute);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') { toggleMute(); e.preventDefault(); }
+});
+syncMuteUI();
 
 // --- Labyrinthe simplifié (1 = mur, 0 = vide) -------------------------------
 // Grille 28x31 générée par bordure + quelques murs internes pour la démo.
@@ -53,45 +137,54 @@ const DIRECTIONS = {
   right: { x: 1, y: 0 },
 };
 
-// --- Entrées : clavier + tactiles ------------------------------------------
-const input = {
-  setDirection(name) {
-    const d = DIRECTIONS[name];
-    if (d) player.nextDir = d;
-  },
-};
-
-// Clavier (desktop)
-window.addEventListener('keydown', (e) => {
-  switch (e.key) {
-    case 'ArrowUp': case 'w': case 'W': case 'z': case 'Z': input.setDirection('up'); e.preventDefault(); break;
-    case 'ArrowDown': case 's': case 'S': input.setDirection('down'); e.preventDefault(); break;
-    case 'ArrowLeft': case 'a': case 'A': case 'q': case 'Q': input.setDirection('left'); e.preventDefault(); break;
-    case 'ArrowRight': case 'd': case 'D': input.setDirection('right'); e.preventDefault(); break;
-    case ' ': case 'Enter': toggleAction(); e.preventDefault(); break;
-    case 'p': case 'P': case 'Escape': togglePause(); e.preventDefault(); break;
-    default: break;
-  }
+// --- Entrées unifiées : clavier + tactile + gamepad -----------------------
+const input = createInput({
+  onDirection: (name) => { const d = DIRECTIONS[name]; if (d) player.nextDir = d; },
+  onAction: toggleAction,
+  onDeviceChange: (device) => updateTutorial(device),
 });
 
-// Tactiles : les boutons du D-pad / action (ne font rien si l'élément est
-// masqué en CSS, mais les listeners restent inoffensifs).
-function bindTouchButton(selector, onDown) {
-  document.querySelectorAll(selector).forEach((btn) => {
-    const start = (e) => { e.preventDefault(); onDown(btn); btn.classList.add('pressed'); };
-    const end = (e) => { e.preventDefault(); btn.classList.remove('pressed'); };
-    btn.addEventListener('touchstart', start, { passive: false });
-    btn.addEventListener('touchend', end, { passive: false });
-    btn.addEventListener('touchcancel', end, { passive: false });
-    // Souris aussi (utile en test desktop avec les devtools mobiles).
-    btn.addEventListener('mousedown', start);
-    btn.addEventListener('mouseup', end);
-    btn.addEventListener('mouseleave', end);
-  });
-}
+// Branchement des boutons tactiles du DOM (D-pad + action).
+input.bindTouchButton('.dpad-btn', (btn) => input.setDirection(btn.dataset.dir));
+input.bindTouchButton('#touch-action', () => input.pressAction());
 
-bindTouchButton('.dpad-btn', (btn) => input.setDirection(btn.dataset.dir));
-bindTouchButton('#touch-action', () => toggleAction());
+// --- Tutoriel de démarrage (adapté au device d'entrée) --------------------
+const tutorialList = document.getElementById('tutorial-list');
+
+// Cartouches de touche (clavier) / bouton (manette) / geste (tactile).
+const k = (label) => `<span class="key">${label}</span>`;
+
+const TUTORIALS = {
+  [InputDevice.KEYBOARD]: [
+    `Déplacement : ${k('↑')} ${k('↓')} ${k('←')} ${k('→')} <span class="lbl">ou</span> ${k('Z')} ${k('Q')} ${k('S')} ${k('D')}`,
+    `Démarrer / Pause : ${k('Espace')} <span class="lbl">ou</span> ${k('Entrée')}`,
+    `Pause : ${k('P')} <span class="lbl">ou</span> ${k('Échap')}`,
+  ],
+  [InputDevice.GAMEPAD]: [
+    `Déplacement : croix directionnelle <span class="lbl">ou</span> stick gauche`,
+    `Démarrer / Pause : bouton ${k('A')} <span class="lbl">ou</span> ${k('Start')}`,
+    `Connecte/déconnecte la manette : détection automatique.`,
+  ],
+  [InputDevice.TOUCH]: [
+    `Déplacement : croix directionnelle tactile en bas à gauche`,
+    `Démarrer / Pause : bouton ${k('⏯')} en bas à droite`,
+  ],
+};
+
+function updateTutorial(device) {
+  const lines = TUTORIALS[device] || TUTORIALS[InputDevice.KEYBOARD];
+  tutorialList.innerHTML = lines.map((l) => `<li>${l}</li>`).join('');
+}
+updateTutorial(input.device);
+
+// Démarrage au clic sur le bouton "Jouer" ou sur l'overlay (n'importe où sur l'écran de titre).
+const playBtn = document.getElementById('play-btn');
+playBtn.addEventListener('click', () => input.pressAction());
+overlay.addEventListener('click', (e) => {
+  // Ne pas démarrer si on clique sur le bouton paramètres ou un autre contrôle.
+  if (e.target.closest('.settings-dialog') || e.target.id === 'settings-btn') return;
+  input.pressAction();
+});
 
 // --- État de jeu simplifié --------------------------------------------------
 const STATE = { TITLE: 'title', PLAYING: 'playing', PAUSED: 'paused', GAMEOVER: 'gameover' };
@@ -126,9 +219,11 @@ function togglePause() {
   if (state === STATE.PLAYING) {
     state = STATE.PAUSED;
     showOverlay('Pause', 'Appuie pour reprendre');
+    music.setMuted(true);
   } else if (state === STATE.PAUSED) {
     state = STATE.PLAYING;
     hideOverlay();
+    music.setMuted(false);
   }
 }
 
@@ -141,6 +236,10 @@ function startGame() {
   updateHud();
   state = STATE.PLAYING;
   hideOverlay();
+  // Démarre la musique au premier démarrage (geste utilisateur requis par
+  // la politique d'autoplay des navigateurs). Boucle différente à chaque partie.
+  if (!music.playing) music.start();
+  music.setMuted(false);
 }
 
 function updateHud() {
@@ -223,6 +322,7 @@ function render() {
 let last = performance.now();
 let acc = 0;
 function loop(now) {
+  input.pollGamepad();
   let dt = (now - last) / 1000;
   last = now;
   if (dt > 0.25) dt = 0.25; // borne anti-saut après tab inactive
@@ -232,9 +332,10 @@ function loop(now) {
     acc -= STEP;
   }
   render();
+  if (crt.enabled) crt.render(last / 1000);
   requestAnimationFrame(loop);
 }
 
 // Écran de titre initial
-showOverlay('PacmanLike', 'Espace ou ▶ pour jouer');
+showOverlay('PacmanLike', input.device === InputDevice.GAMEPAD ? 'Appuie sur A / Start pour jouer' : (input.device === InputDevice.TOUCH ? 'Appuie sur ⏯ pour jouer' : 'Appuie sur Espace pour jouer'));
 requestAnimationFrame(loop);

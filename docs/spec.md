@@ -102,9 +102,14 @@ Justification : ces comportements sont les patterns historiques éprouvés ; ils
 |---|---|---|
 | Desktop | Déplacement | Flèches ou WASD (AZERTY: ZQSD) |
 | Desktop | Pause | `P` ou `Échap` |
+| Desktop | Couper le son | `M` (bouton haut-parleur du HUD) |
 | Desktop | Démarrer / Rejouer | `Espace` / `Entrée` |
 | Smartphone | Déplacement | D-pad tactile transparent (croix directionnelle) |
 | Smartphone | Démarrer / Pause | Bouton tactile d'action (`⏯`) |
+| Manette (gamepad) | Déplacement | Croix directionnelle ou stick gauche |
+| Manette (gamepad) | Démarrer / Pause | Bouton `A` ou `Start` |
+
+Le support gamepad repose sur la **Gamepad API** du navigateur (`gamepadconnected`/`gamepaddisconnected` + interrogation `navigator.getGamepads()` à chaque frame). Le mapping suit le *Standard Gamepad layout*. La manette est détectée à la connexion (et à la première pression si l'événement de connexion a été manqué), et le retour au clavier/tactile se fait à la déconnexion.
 
 #### 2.6.1 Contrôles tactiles transparents (mobile)
 
@@ -123,21 +128,57 @@ Justification :
 - `touch-action: none` et `overscroll-behavior: none` empêchent les gestes parasites (scroll, zoom) pendant le jeu.
 - Les boutons utilisent `touchstart`/`touchend` (avec fallback souris) pour une réactivité immédiate, sans délai de clic mobile.
 
+#### 2.6.2 Tutoriel de démarrage adaptatif
+
+Au démarrage, un **mini-tutoriel** s'affiche sur l'écran de titre et liste les touches/boutons nécessaires pour jouer. Son contenu **s'adapte au device d'entrée actif** :
+
+- **Clavier** : flèches/ZQSD, `Espace`/`Entrée`, `P`/`Échap`.
+- **Manette** : croix directionnelle ou stick gauche, bouton `A`/`Start`.
+- **Tactile** : D-pad et bouton d'action à l'écran.
+
+Le device actif est déterminé par la dernière source d'entrée utilisée, avec une valeur par défaut (tactile si `pointer: coarse`, sinon clavier). À chaque changement de device (ex. connexion d'une manette en cours de partie), le tutoriel et le message de l'écran de titre se mettent à jour dynamiquement via un callback `onDeviceChange`.
+
+Justification :
+
+- Un joueur découvrant le jeu ne doit pas deviner les contrôles ; le tutoriel les expose dans sa langue, formatées en cartouches de touche lisibles.
+- L'adaptation au device évite d'afficher des touches de clavier à un joueur à la manette (ou inversement), ce qui serait source de confusion.
+
 ---
 
 ## 3. Choix de design
 
 ### 3.1 Pixel art
 
-- Résolution logique basse (ex. 224×248 px internes équivalents au cadre de jeu), affichée agrandie avec **`image-rendering: pixelated`** pour conserver des bords nets.
-- Sprites à la résolution native (ex. 16×16 px par personnage), sans interpolation de lissage.
+- Résolution logique basse du canvas de jeu : **224×248 px** (28×31 cellules de 8 px).
+- Sprites à la résolution native (ex. 16×16 px par personnage), dessinés sans interpolation de lissage.
 - Palette de couleurs limitée et cohérente (fonds noirs, murs bleus, pastilles jaunes) pour un rendu authentique « arcade ».
+- Le canvas 2D de jeu est **masqué** (`display: none` via la classe `source-canvas`) : il sert uniquement de **source de texture** pour le rendu WebGL (cf. 3.1.bis). L'affichage visible est le canvas WebGL `#crt`.
 
 Justification : le pixel art est peu coûteux à produire, cohérent avec l'esthétique rétro demandée, et performant à l'affichage.
 
+### 3.1.bis Rendu WebGL et post-traitement CRT
+
+Le rendu passe par **WebGL1** : le jeu est dessiné sur un canvas 2D de basse résolution (source), puis échantillonné comme texture par un canvas WebGL d'affichage qui applique un **shader de fragment simulant un moniteur CRT**.
+
+Effets du shader CRT (`shaders/crt.glsl.js`) :
+
+- **Distorsion de barillet** (courbure d'écran) : les UV sont écartées vers le centre ; les bords hors-tube sont noirs.
+- **Vignettage** des coins (assombrissement radial).
+- **Lignes de balayage** (scanlines) : modulation sinusoïdale selon la résolution d'affichage.
+- **Aberration chromatique** : séparation des canaux RGB sur les bords (effet de prisme du tube).
+- **Scintillement** (flicker) basse fréquence (deux sinus incommensurables).
+- **Glitches de balayage** : déclenchement sporadique d'une bande horizontale décalée latéralement (décalage `x` doux sur les bords de la bande), typique des perturbations de balayage CRT.
+
+Justification :
+
+- Un shader unique en une passe plein écran (quad) reste performant et sans dépendance (WebGL1 est supporté partout).
+- La basse résolution de la source conserve l'esthétique pixel art ; le shader CRT ajoute l'illusion du tube sans alourdir la logique de jeu.
+- Les glitches de balayage sont générés côté CPU (déclenchement aléatoire, durée courte) puis passés au shader via un uniform `vec3` (position de bande, amplitude de décalage, activation) : simple et déterministe par frame.
+- Fallback : si WebGL est indisponible, le canvas 2D source reste visible (rendu sans effet CRT).
+
 ### 3.2 Sans dépendance externe
 
-Aucune bibliothèque de jeu (Phaser, PixiJS…) ni framework. Tout est en **JavaScript vanilla** et Canvas 2D.
+Aucune bibliothèque de jeu (Phaser, PixiJS…) ni framework. Le moteur est en **JavaScript vanilla** : rendu de jeu sur Canvas 2D, post-trichage d'affichage via **WebGL1** (shaders GLSL).
 
 Justification :
 
@@ -156,9 +197,51 @@ Les sprites simples (dots, pastilles, personnages) peuvent être **générés pa
 
 Un fichier d'assets graphiques (PNG) reste une option d'évolution si l'on souhaite un rendu plus détaillé.
 
-### 3.4 Sons
+### 3.4 Sons et musique chiptune
 
-Effets sonores simples (manger une pastille, manger un fantôme, perdre une vie) générés via l'**API Web Audio** (oscillateurs programmés), sans fichiers audio externes. Une bande-son optionnelle peut être ajoutée plus tard.
+Tout l'audio est **généré procéduralement** via l'**API Web Audio** (oscillateurs programmés), sans aucun fichier audio externe.
+
+#### 3.4.1 Musique chiptune générée aléatoirement
+
+Une **boucle musicale chiptune** est générée aléatoirement à chaque partie, en respectant des règles d'harmonie simples pour rester consonnante (`music.js`) :
+
+- **Gamme de La mineur naturel** (A B C D E F G, aucune altération) : sonorité « arcade » familière.
+- **Progression d'accords en boucle** sur 4 mesures : **I (Am) → IV (F) → V (G) → I (Am)**. Le V (dominante) résout naturellement sur le I, ce qui rend la boucle circulaire et stable.
+- **Basse** : fondamentale de chaque accord, note longue par mesure (onde triangle, octave grave).
+- **Mélodie** : tirée parmi les notes de l'accord courant (notes « concordantes ») pour 80 %, avec 20 % de **notes de passage** (ton voisin dans la gamme, mouvement conjoint) pour le mouvement. Rythme sur un motif 16 pas/mesure avec silences ; densité plus forte sur les temps.
+- **Timbres** : onde **carrée** (mélodie, perçante) et **triangle** (basse, douce), enveloppes ADSR courtes — typiques du son chiptune 8-bit.
+- **Tempo** ~140 BPM, signature 4/4, boucle d'environ 6,9 s.
+- **Graine aléatoire** (LCG) différente à chaque partie : la boucle change tout en restant musicalement cohérente.
+
+Justification :
+
+- La génération procédurale évite tout asset audio externe (autonomie du projet) tout en offrant une bande-son variée (pas de répétition lassante entre parties).
+- Les contraintes harmoniques (gamme + triades + progression I-IV-V-I + notes concordantes) garantissent la consonnance même avec un générateur aléatoire, sans nécessiter un moteur musical complexe.
+- Le démarrage est déclenché au premier geste utilisateur (`startGame()`) pour respecter la **politique d'autoplay** des navigateurs ; la musique est **mutée en pause** et restaurée à la reprise.
+
+#### 3.4.2 Effets sonores
+
+Effets simples (manger une pastille, manger un fantôme, perdre une vie) générés via la même API Web Audio (oscillateurs courts). À implémenter avec la logique de jeu.
+
+#### 3.4.3 Boîte de dialogue de paramètres
+
+Une **boîte de dialogue de paramètres** (élément `<dialog>` natif du navigateur) est accessible depuis un bouton « ⚙ » du HUD. Elle expose :
+
+- **Curseur de volume** (0–100 %) réglant le gain du master audio en direct.
+- **Case « Couper la musique »** coupant/mettant en sourdine la musique.
+- **Bouton Fermer** validant et refermant la boîte.
+
+Les réglages sont **persistés dans `localStorage`** (`pacmanlike.audio`) : volume et état de mute sont restaurés au prochain chargement.
+
+Justification :
+
+- L'élément `<dialog>` natif gère l'accessibilité (focus, Échap pour fermer, backdrop modal) sans dépendance externe, et reste stylable en cohérence avec le rendu rétro.
+- La persistance évite de régler le volume à chaque session.
+
+#### 3.4.4 Raccourci clavier
+
+- Touche **`M`** : bascule le mute sans ouvrir la boîte de dialogue.
+- Mute automatique en pause ; restauration à la reprise.
 
 ---
 
@@ -168,6 +251,21 @@ Effets sonores simples (manger une pastille, manger un fantôme, perdre une vie)
 
 Une architecture en **modules séparés par responsabilité**, communiquant par des appels directs de méthodes (pas d'event bus global dans la V1 pour rester simple), avec une séparation nette entre **modèle** (état/logique), **vue** (rendu) et **contrôleur** (entrées + orchestration).
 
+Structure **actuelle** (squelette jouable, fichiers à la racine) :
+
+```
+├── index.html            // Structure DOM: canvas 2D (#game), canvas WebGL (#crt), HUD, overlay, contrôles tactiles
+├── styles.css           // Mise en page, pixel art, contrôles tactiles transparents, media queries mobiles
+├── main.js              // Point d'entrée: boucle à pas fixe, joueur déplaçable, overlay/états, tutoriel adaptatif
+├── input.js             // Entrées unifiées: clavier + tactile + gamepad (Gamepad API), détection du device actif
+├── music.js             // Musique chiptune générée procéduralement (Web Audio, gamme + progression harmonique)
+├── crt.js               // Renderer WebGL1: quad plein écran, texture depuis #game, gestion des glitches de balayage
+└── shaders/
+    └── crt.glsl.js       // Vertex + fragment shaders CRT (GLSL exporté en chaînes JS)
+```
+
+Structure **cible** (refactor \`src/\` décrit ci-dessous, non encore appliquée) :
+
 ```
 src/
 ├── main.js              // Point d'entrée: bootstrap, branche la game loop
@@ -176,7 +274,7 @@ src/
 │   ├── GameState.js     // Énumération des états (TITLE, PLAYING, ...)
 │   ├── Timer.js         // accumulateur à pas fixe
 │   └── input/
-│       └── Input.js     // Capture clavier, expose l'état des touches
+│       └── Input.js     // Capture clavier + tactile, expose l'état des touches
 ├── world/
 │   ├── Maze.js          // Grille, parsing du niveau, requêtes (mur? dot? tunnel?)
 │   ├── Cell.js          // Types de cellules
@@ -191,7 +289,9 @@ src/
 │   ├── AISystem.js          // Décisions de direction des fantômes aux intersections
 │   └── ScoreSystem.js       // Score, vies, multiplicateurs de combo
 ├── render/
-│   ├── Renderer.js      // Boucle de rendu, interpolation
+│   ├── Renderer.js      // Rendu du jeu sur canvas 2D (source), interpolation
+│   ├── CRTRenderer.js   // Renderer WebGL1 + shaders CRT (équivalent de crt.js)
+│   ├── shaders/         // Shaders GLSL (équivalent de shaders/crt.glsl.js)
 │   ├── SpriteFactory.js // Génération/cache de sprites procéduraux
 │   └── HUD.js           // Score, vies, niveau affichés à l'écran
 └── audio/
@@ -227,9 +327,10 @@ Utilisation des modules ECMAScript standard, servis via un simple serveur statiq
 2. `Game` entre en état `TITLE`.
 3. Sur `Espace`, passage à `PLAYING` : la boucle commence à appeler `update(STEP)` puis `render()`.
 4. `update` : `Input` fixe la direction voulue du joueur ; `Player` applique le mouvement ; `AISystem` décide les directions des fantômes ; `CollisionSystem` détecte les collisions (pastilles, fantômes) ; `ScoreSystem` met à jour le score.
-5. `render` : `Renderer` dessine le labyrinthe, les entités et le `HUD`.
-6. À la fin du niveau (plus de pastilles) → incrémentation du niveau, reparse avec paramètres de difficulté accrus.
-7. À la perte de la dernière vie → `GAME_OVER` → `TITLE` (rejouer).
+5. `render` : `Renderer` dessine le labyrinthe, les entités et le `HUD` sur le canvas 2D source (`#game`, masqué).
+6. `crt.render(t)` : le renderer WebGL1 échantillonne le canvas 2D comme texture et applique le shader CRT (scanlines, courbure, aberration chromatique, glitches de balayage) sur le canvas d'affichage `#crt`. Si WebGL est indisponible, le canvas 2D source est affiché directement (fallback sans effet).
+7. À la fin du niveau (plus de pastilles) → incrémentation du niveau, reparse avec paramètres de difficulté accrus.
+8. À la perte de la dernière vie → `GAME_OVER` → `TITLE` (rejouer).
 
 ---
 
@@ -296,7 +397,6 @@ Exemple (extrait, non à l'échelle) :
 - Fruits bonus à apparition temporisée.
 - Sauvegarde du meilleur score (`localStorage`).
 - Chargement d'assets graphiques/sprites PNG optionnels.
-- Musique de fond et variantes sonores.
 - Mode multijoueur local (alterné ou simultané) — hors périmètre V1.
 
 ---
@@ -310,7 +410,15 @@ Exemple (extrait, non à l'échelle) :
 - [ ] Le mode *frightened* rend les fantômes vulnérables et mangeables.
 - [ ] La fin du niveau (toutes pastilles mangées) enchaîne vers le niveau suivant.
 - [ ] La perte de toutes les vies mène à l'écran `GAME_OVER`.
-- [ ] Le rendu est en pixel art net (pas de lissage).
+- [ ] Le rendu est en pixel art net (pas de lissage) sur le canvas 2D source.
+- [ ] Le rendu final passe par WebGL avec le shader CRT (scanlines, courbure, vignettage, aberration chromatique, scintillement).
+- [ ] Des glitches de balayage apparaissent sporadiquement (bande horizontale décalée).
+- [ ] En l'absence de WebGL, le canvas 2D source s'affiche en fallback sans effet CRT.
 - [ ] Sur smartphone (paysage ou portrait), un D-pad et un bouton d'action transparents s'affichent et sont utilisables.
 - [ ] Sur desktop, les contrôles tactiles sont masqués et le clavier suffit à jouer.
+- [ ] Une manette (Gamepad API) connectée permet de jouer (croix/stick + bouton A/Start), avec détection auto à la connexion/déconnexion.
+- [ ] Un tutoriel de démarrage affiche les contrôles adaptés au device actif (clavier / manette / tactile) et se met à jour au changement de device.
+- [ ] Sons générés (Web Audio).
+- [ ] Une boîte de dialogue de paramètres permet de régler le volume et de couper la musique (persisté dans `localStorage`).
+- [ ] Le son peut être coupé/restauré par la touche `M` et est muté en pause.
 - [ ] Aucune dépendance externe n'est requise.

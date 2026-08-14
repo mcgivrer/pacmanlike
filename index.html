@@ -13,15 +13,25 @@
       <div class="hud-item"><span class="hud-label">Score</span><span id="score">0</span></div>
       <div class="hud-item"><span class="hud-label">Vies</span><span id="lives">3</span></div>
       <div class="hud-item"><span class="hud-label">Niveau</span><span id="level">1</span></div>
+      <button id="settings-btn" class="hud-btn" aria-label="Paramètres" title="Paramètres">⚙</button>
     </header>
 
     <canvas id="game" width="224" height="248"></canvas>
 
-    <!-- Écran d'overlay (titre / pause / game over) -->
+    <!-- Écran d'overlay (titre / pause / game over + tutoriel de démarrage) -->
     <div id="overlay" class="overlay visible">
       <div class="overlay-card">
         <h1 id="overlay-title">PacmanLike</h1>
-        <p id="overlay-message">Appuie sur Espace pour jouer</p>
+        <p id="overlay-message">Appuie pour jouer</p>
+
+        <!-- Tutoriel de contrôles (adapté au device d'entrée détecté) -->
+        <div id="tutorial" class="tutorial">
+          <h2 class="tutorial-title">Comment jouer</h2>
+          <ul id="tutorial-list" class="tutorial-list">
+            <!-- Contenu généré dynamiquement selon le device (clavier/manette/tactile) -->
+          </ul>
+        </div>
+        <button id="play-btn" class="play-btn" type="button">▶ Jouer</button>
       </div>
     </div>
 
@@ -35,6 +45,28 @@
       </div>
       <button id="touch-action" class="touch-action" aria-label="Démarrer / Pause">⏯</button>
     </nav>
+  <!-- Boîte de dialogue de paramètres (volume + mute musique) -->
+  <dialog id="settings-dialog" class="settings-dialog">
+    <form method="dialog" class="settings-form">
+      <h2 class="settings-title">Paramètres</h2>
+
+      <div class="settings-row">
+        <label for="volume" class="settings-label">Volume</label>
+        <input type="range" id="volume" min="0" max="100" value="18" class="settings-range">
+        <span id="volume-value" class="settings-value">18%</span>
+      </div>
+
+      <div class="settings-row">
+        <label for="mute-music" class="settings-label">Couper la musique</label>
+        <input type="checkbox" id="mute-music" class="settings-check">
+      </div>
+
+      <div class="settings-actions">
+        <button type="submit" value="close" class="settings-close" autofocus>Fermer</button>
+      </div>
+    </form>
+  </dialog>
+
   </div>
 
   <script type="module" src="main.js"></script>
